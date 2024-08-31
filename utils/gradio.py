@@ -1,6 +1,7 @@
 import inspect
 from functools import wraps
 import re
+import json
 import gradio as gr
 
 def _convert_history(history, type='tuples'):
@@ -63,9 +64,11 @@ class ChatInterface(gr.Blocks):
                     fake_response = gr.MultimodalTextbox(visible=False, label="Response")
 
         with gr.Row():
-            retry_btn = gr.Button("Retry", scale=1, min_width=0)
-            undo_btn = gr.Button("Undo", scale=1, min_width=0)
-            clear_btn = gr.Button("Clear", scale=1, min_width=0)
+            retry_btn = gr.Button("Retry", scale=5, min_width=0)
+            undo_btn = gr.Button("Undo", scale=5, min_width=0)
+            clear_btn = gr.Button("Clear", scale=5, min_width=0)
+            export_btn = gr.DownloadButton("📥", scale=1, min_width=0, elem_id="export_btn")
+            export_btn_aux = gr.DownloadButton("Export", scale=1, min_width=0, elem_id="export_btn_aux", visible=False)
 
         fake_api_btn = gr.Button("Fake API", visible=False)
         stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
@@ -98,6 +101,7 @@ class ChatInterface(gr.Blocks):
             self._upload_fn, 
             [textbox, upload_btn], 
             [textbox], queue=False, api_name='upload')
+        export_btn.click(self._export, [chatbot], [export_btn_aux], api_name=False)
 
     def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
@@ -172,6 +176,20 @@ class ChatInterface(gr.Blocks):
     def _clear(self):
         return gr.update(value=[]), gr.update(value=[])
     
+    def _export(self, chatbot):
+        import jinja2
+        from utils.utils import get_temp_file_name
+        json_messages = json.dumps(chatbot)
+        with open('assets/chat.html') as f:
+            template = f.read()
+        html_messages = jinja2.Template(template).render(title="Chat History", messages=json_messages)
+        fname = get_temp_file_name(prefix='gradio/chat-', suffix='.html')
+        # fname = get_temp_file_name(filename='gradio/chat_history.html')
+        print(fname)
+        with open(fname, 'w') as f:
+            f.write(html_messages)
+        return fname
+    
     def _upload_fn(self, message, filepath):
         if filepath is None:
             return message
@@ -221,6 +239,15 @@ function registerMessageButtons() {
 var intervalId = window.setInterval(function(){
   registerMessageButtons();
 }, 1000);
+
+setTimeout(function() {
+    document.getElementById("export_btn").addEventListener("click", function() {
+        setTimeout(function() {
+            document.getElementById("export_btn_aux").click();
+        }, 1000);
+    });
+}, 1000);
+
 </script>
 """
     def template_response(*args, **kwargs):
@@ -235,3 +262,18 @@ var intervalId = window.setInterval(function(){
     gr.routes.templates.TemplateResponse = template_response
 
 GradioTemplateResponseOriginal = gr.routes.templates.TemplateResponse
+
+if __name__ == '__main__':
+
+    # python -m utils.gradio
+    from utils.llms import _llm_call, _llm_call_stream
+
+    def bot_fn(message, history, *args):
+        history += [{'role': 'user', 'content': message}]
+        bot_message = _llm_call_stream(message, history)
+        yield from bot_message
+    
+    with gr.Blocks() as demo:
+        chatbot = ChatInterface(bot_fn, type='messages')
+    reload_javascript()
+    demo.queue().launch(server_name='0.0.0.0')

@@ -28,3 +28,12 @@ def change_signature(arg_list, kwarg_dict={}):
         wrapper.__signature__ = new_signature
         return wrapper
     return decorator
+
+def get_temp_file_name(prefix='gradio/app-', suffix='', filename=None):
+    import os
+    import tempfile
+    if filename is not None:
+        fname = os.path.join(tempfile.gettempdir(), filename)
+    else:
+        fname = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix).name
+    return fname
