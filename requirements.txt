@@ -6,3 +6,6 @@ jinja2
 # for Azure
 azure-cognitiveservices-speech
 
+# for agent
+tool2schema
+
