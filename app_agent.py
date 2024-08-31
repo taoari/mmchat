@@ -32,6 +32,7 @@ llms.print = print
 ################################################################
 
 _default_session_state = dict(
+        messages = [],
         context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
         message=None,
         previous_message=None,
@@ -67,6 +68,14 @@ COMPONENTS = {}
 
 COMPONENTS_EXCLUDED = {}
 EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
+
+from utils import tools
+from tool2schema import FindToolEnabledSchemas
+tools_schema = FindToolEnabledSchemas(tools)
+print('Tools:\n' + json.dumps(tools_schema, indent=2))
+
+# DIRECT_RESPONSE_TOOLS = ['get_delivery_date'] # use function output directly instead of LLM rewrite
+DIRECT_RESPONSE_TOOLS = [] # always rewrite function output with LLM
 
 ################################################################
 # Utils
@@ -113,16 +122,13 @@ def _speech_synthesis(text):
 # Bot fn
 ################################################################
 
-from utils import tools
-from tool2schema import FindToolEnabledSchemas
-tools_schema = FindToolEnabledSchemas(tools)
-print('Tools:\n' + json.dumps(tools_schema, indent=2))
-
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 
 def _llm_call_tools(message, history, **kwargs):
+    # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
+    messages = kwargs['session_state']['messages']
     global tools_schema
-    messages = history + [{'role': 'user', 'content': message}]
+    messages.append({'role': 'user', 'content': message})
     import openai
     client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     resp = client.chat.completions.create(
@@ -138,15 +144,30 @@ def _llm_call_tools(message, history, **kwargs):
         tool_call = bot_msg.tool_calls[0]
         function_name = tool_call.function.name
         arguments = json.loads(tool_call.function.arguments)
-        
         try:
             result = getattr(tools, function_name)(**arguments)
-            bot_message = f'Your delivery date for order {arguments["order_id"]} is {result}.'
+
+            if function_name in DIRECT_RESPONSE_TOOLS:
+                bot_message = tools.format_direct_response(function_name, result, arguments)
+            else:
+                function_call_result_message = {
+                    "role": "tool",
+                    "content": json.dumps({
+                        **arguments,
+                        **tools.format_returns(function_name, result)
+                    }),
+                    "tool_call_id": resp.choices[0].message.tool_calls[0].id
+                }
+                messages.append(bot_msg) # function_call_triggered_message
+                messages.append(function_call_result_message)
+                response = openai.chat.completions.create(
+                    model='gpt-4o',
+                    messages=messages,
+                )
+                bot_message = response.choices[0].message.content
         except:
             bot_message = f'ERROR: Function call for {function_name} with arguments {arguments} failed.'
-        # import pdb; pdb.set_trace()
-        # order_id = arguments.get('order_id')
-        # delivery_date = get_delivery_date(order_id)
+    messages.append({'role': 'assistant', 'content': bot_message})
     return bot_message
 
 def _slash_bot_fn(message, history, **kwargs):
@@ -193,7 +214,8 @@ def bot_fn(message, history, *args):
         _speech_synthesis(_rerender_message(bot_message, format='speech'))
     __TOC = time.time()
     session_state['elapsed_time'] = __TOC - __TIC
-    print(json.dumps(kwargs, indent=2))
+    # print(json.dumps(kwargs, indent=2))
+    print(pprint.pformat(kwargs))
     return bot_message
 
 ################################################################
