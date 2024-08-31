@@ -46,6 +46,7 @@ class ChatInterface(gr.Blocks):
             title=title or "Gradio",
             theme=theme,
         )
+
         chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, label='Chatbot')
         chatbot_state = gr.State([])
 
@@ -88,6 +89,19 @@ class ChatInterface(gr.Blocks):
         self.retry_btn = retry_btn
         self.undo_btn = undo_btn
         self.clear_btn = clear_btn
+        self.export_btn = export_btn
+        self.export_btn_aux = export_btn_aux
+
+        self.fake_response = fake_response
+        self.fake_api_btn = fake_api_btn
+
+        self._setup_event()
+
+    def _setup_event(self):
+        textbox, chatbot, chatbot_state, additional_inputs = self.textbox, self.chatbot, self.chatbot_state, self.additional_inputs
+        submit_btn, retry_btn, undo_btn, clear_btn, upload_btn = self.submit_btn, self.retry_btn, self.undo_btn, self.clear_btn, self.upload_btn
+        fake_response, fake_api_btn = self.fake_response, self.fake_api_btn
+        export_btn, export_btn_aux = self.export_btn, self.export_btn_aux
 
         self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
@@ -185,7 +199,7 @@ class ChatInterface(gr.Blocks):
         html_messages = jinja2.Template(template).render(title="Chat History", messages=json_messages)
         fname = get_temp_file_name(prefix='gradio/chat-', suffix='.html')
         # fname = get_temp_file_name(filename='gradio/chat_history.html')
-        print(fname)
+        print(f"Export chat history to: {fname}")
         with open(fname, 'w') as f:
             f.write(html_messages)
         return fname
@@ -269,7 +283,6 @@ if __name__ == '__main__':
     from utils.llms import _llm_call, _llm_call_stream
 
     def bot_fn(message, history, *args):
-        history += [{'role': 'user', 'content': message}]
         bot_message = _llm_call_stream(message, history)
         yield from bot_message
     

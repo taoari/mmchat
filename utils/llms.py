@@ -80,7 +80,9 @@ def _llm_call(message, history, **kwargs):
     system_prompt = kwargs.get('system_prompt', None)
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
 
-    messages = history + [{'role': 'user', 'content': message}]
+    messages = history
+    if message:
+        messages += [{'role': 'user', 'content': message}]
     if system_prompt:
         messages = [{'role': 'system', 'content': system_prompt}] + messages
 
@@ -101,7 +103,9 @@ def _llm_call_stream(message, history, **kwargs):
     system_prompt = kwargs.get('system_prompt', None)
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
 
-    messages = history + [{'role': 'user', 'content': message}]
+    messages = history
+    if message:
+        messages += [{'role': 'user', 'content': message}]
     if system_prompt:
         messages = [{'role': 'system', 'content': system_prompt}] + messages
 
