@@ -1,0 +1,74 @@
+<html>
+  <head>
+    <title>Chat Data Export</title>
+    <style>
+      body {
+        margin: 20px;
+      }
+      h4 {
+        font-family: sans-serif;
+        margin: 0;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .conversation {
+        border: 1px solid black;
+        padding: 20px;
+        background-color: #f3f3f3;
+      }
+      .message {
+        white-space: pre-wrap;
+        margin: 20px 0;
+      }
+      .author {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .author::first-letter {
+        text-transform: uppercase;
+      }
+    </style>
+    <script>
+      var jsonData = [{'title': "{{ title }}", 'messages': {{ messages }} }]
+      
+      // on load, add messages to the root div
+      window.onload = function() {
+          var root = document.getElementById("root");
+          for (var i = 0; i < jsonData.length; i++) {
+              var conversation = jsonData[i];
+              var messages = conversation.messages;
+              var div = document.createElement("div");
+              div.className = "conversation";
+              div.innerHTML = "<h4>" + conversation.title + "</h4>";
+              for (var j = 0; j < messages.length; j++) {
+                  var message = document.createElement("pre");
+                  message.className = "message";
+                  if (typeof messages[j].content == 'string') {
+                      message.innerHTML = `<div class="author">${messages[j].role}</div><div>${messages[j].content}</div>`;
+                  } else {
+                      text = ''
+                      for (var k = 0; k < messages[j].content.length; k++) {
+                          content = messages[j].content[k];
+                          if (content.type == 'image_url') {
+                              text += `<img src="${content.image_url.url}" />`;
+                          } else if (content.type == 'text') {
+                              text += content.text
+                          }   
+                      }
+                      message.innerHTML = `<div class="author">${messages[j].role}</div><div>${text}</div>`;
+                  }
+                  
+                  div.appendChild(message);
+              }
+              root.appendChild(div);
+          }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
