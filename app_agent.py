@@ -146,8 +146,8 @@ def _llm_call_tools(message, history, **kwargs):
         arguments = json.loads(tool_call.function.arguments)
         try:
             result = getattr(tools, function_name)(**arguments)
-            function_call_desc = f"Call function {function_name} with arguments {arguments}, and got result {result}."
-
+            
+            function_call_desc = f"The function {function_name} was called with arguments {arguments}, returning result {result}."
             details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
 
             if function_name in DIRECT_RESPONSE_TOOLS:

@@ -17,12 +17,12 @@ def get_spinner(variant='primary'):
 
 MESSAGE_TEMPLATE = """
 {% if msg.details %}
-    <div class="details">
+    <div class="details card bg-primary text-white">
     {% for detail in msg.details %}
         {% if detail.before %}
             <details>
-                <summary>{{ detail.title }}</summary>
-                <p>{{ detail.content }}</p>
+                <summary class="card-header">{{ detail.title }}</summary>
+                <p class="card-body card-text">{{ detail.content }}</p>
             </details>
         {% endif %}
     {% endfor %}
@@ -121,12 +121,12 @@ MESSAGE_TEMPLATE = """
     </div>
 {% endif %}
 {% if msg.details %}
-    <div class="details">
+    <div class="details card bg-primary text-white">
     {% for detail in msg.details %}
         {% if not detail.before %}
             <details>
-                <summary>{{ detail.title }}</summary>
-                <p>{{ detail.content }}</p>
+                <summary class="card-header">{{ detail.title }}</summary>
+                <p class="card-body card-text">{{ detail.content }}</p>
             </details>
         {% endif %}
     {% endfor %}
