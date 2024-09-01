@@ -3,9 +3,14 @@ python-dotenv
 bs4
 jinja2
 
+# for LLM
+openai
+langchain
+langchain_openai
+langchain_community
+
 # for Azure
 azure-cognitiveservices-speech
 
 # for agent
 tool2schema
-

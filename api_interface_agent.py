@@ -6,7 +6,7 @@ def gradio_chat(message):
     result = client.predict(
             message=message,
             system_prompt="You are a helpful customer support assistant. Use the supplied tools to assist the user.",
-            chat_engine="agent",
+            chat_engine="openai_agent",
             tools=["get_delivery_date"],
             speech_synthesis=False,
             temperature=0.7,

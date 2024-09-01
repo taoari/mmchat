@@ -32,8 +32,8 @@ llms.print = print
 ################################################################
 
 from utils import tools as TOOLS
-from tool2schema import FindToolEnabledSchemas
-TOOLS_SCHEMA = FindToolEnabledSchemas(TOOLS)
+import tool2schema
+TOOLS_SCHEMA = tool2schema.FindToolEnabledSchemas(TOOLS)
 print('Tools:\n' + json.dumps(TOOLS_SCHEMA, indent=2))
 
 # DIRECT_RESPONSE_TOOLS = ['get_delivery_date'] # use function output directly instead of LLM rewrite
@@ -62,7 +62,7 @@ SETTINGS = {
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
         'system_prompt': dict(cls='Textbox', interactive=True, value=prompts.PROMPT_CHECK_DELIVERY_DATE.strip(), lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'agent'], value='agent', 
+        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent'], value='openai_agent', 
                 interactive=True, label="Chat engine"),
         'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
                 value=AVAILABLE_TOOLS,
@@ -84,6 +84,15 @@ EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot ad
 ################################################################
 # Utils
 ################################################################
+
+def convert_tools_for_langchain(TOOLS):
+    from langchain.agents import Tool
+    functions = tool2schema.FindToolEnabled(TOOLS)
+    def _convert(func):
+        schema = func.to_json()
+        # TODO: arguments
+        return Tool(name=schema['function']['name'], func=func.func, description=schema['function']['description'])
+    return [_convert(func) for func in functions]
 
 def _create_from_dict(PARAMS, tabbed=False):
     params = {}
@@ -126,9 +135,9 @@ def _speech_synthesis(text):
 # Bot fn
 ################################################################
 
-from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
+from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
 
-def _llm_call_tools(message, history, **kwargs):
+def _openai_agent_bot_fn(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
     global TOOLS_SCHEMA
@@ -178,6 +187,50 @@ def _llm_call_tools(message, history, **kwargs):
     messages.append({'role': 'assistant', 'content': bot_message})
     return bot_message
 
+def _langchain_agent_bot_fn(message, history, **kwargs):
+    
+    system_prompt = kwargs.get('system_prompt', None)
+    # session_state = kwargs['session_state']
+    chat_engine = 'gpt-4o'
+
+    messages = history
+    if message:
+        messages += [{'role': 'user', 'content': message}]
+    if system_prompt:
+        messages = [{'role': 'system', 'content': system_prompt}] + messages
+
+    from langchain.agents import initialize_agent, Tool
+    from langchain.agents import AgentType
+
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(temperature=0, model=chat_engine)
+    
+    tools = convert_tools_for_langchain(TOOLS)
+    # tools = [t for t in tools if t.name in kwargs['tools']]
+
+    from langchain.prompts import MessagesPlaceholder
+    from langchain.memory import ConversationBufferMemory
+
+    agent_kwargs = {
+        "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
+    }
+
+    memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
+    # for human, ai in history:
+    #     memory.save_context({"input": human}, {"output": ai})
+    for i, msg in enumerate(history): # NOTE: history, not messages (history with input)
+        if msg['role'] == 'user':
+            if len(history) > i+1 and history[i+1]['role'] == 'assistant':
+                memory.save_context({'input': msg['content']}, {'output': history[i+1]['content']})
+        # TODO: system
+    print(memory.load_memory_variables({}))
+
+    mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
+                agent_kwargs=agent_kwargs, memory=memory)
+    bot_message = mrkl.invoke(message)['output']
+    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
+    return bot_message
+
 def _slash_bot_fn(message, history, **kwargs):
     cmds = message[1:].split(' ', maxsplit=1)
     cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
@@ -208,7 +261,8 @@ def bot_fn(message, history, *args):
         bot_message = {'random': _random_bot_fn,
             'gpt-3.5-turbo': _llm_call,
             'gpt-4o': _llm_call_stream,
-            'agent': _llm_call_tools,
+            'openai_agent': _openai_agent_bot_fn,
+            'langchain_agent': _langchain_agent_bot_fn,
             }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     ##########################################################
