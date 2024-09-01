@@ -146,9 +146,12 @@ def _llm_call_tools(message, history, **kwargs):
         arguments = json.loads(tool_call.function.arguments)
         try:
             result = getattr(tools, function_name)(**arguments)
+            function_call_desc = f"Call function {function_name} with arguments {arguments}, and got result {result}."
+
+            details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
 
             if function_name in DIRECT_RESPONSE_TOOLS:
-                bot_message = tools.format_direct_response(function_name, result, arguments)
+                bot_message = render_message(dict(text=tools.format_direct_response(function_name, result, arguments), details=details))
             else:
                 function_call_result_message = {
                     "role": "tool",
@@ -164,7 +167,7 @@ def _llm_call_tools(message, history, **kwargs):
                     model='gpt-4o',
                     messages=messages,
                 )
-                bot_message = response.choices[0].message.content
+                bot_message = render_message(dict(text=response.choices[0].message.content, details=details))
         except:
             bot_message = f'ERROR: Function call for {function_name} with arguments {arguments} failed.'
     messages.append({'role': 'assistant', 'content': bot_message})
