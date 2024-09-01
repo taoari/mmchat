@@ -86,12 +86,14 @@ EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot ad
 ################################################################
 
 def convert_tools_for_langchain(TOOLS):
-    from langchain.agents import Tool
+    import pdb; pdb.set_trace()
+    from langchain_core.tools import Tool, StructuredTool
+    
     functions = tool2schema.FindToolEnabled(TOOLS)
     def _convert(func):
         schema = func.to_json()
         # TODO: arguments
-        return Tool(name=schema['function']['name'], func=func.func, description=schema['function']['description'])
+        return StructuredTool(name=schema['function']['name'], func=func.func, description=schema['function']['description'], args_schema=schema['function']['parameters'])
     return [_convert(func) for func in functions]
 
 def _create_from_dict(PARAMS, tabbed=False):
@@ -140,13 +142,14 @@ from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messa
 def _openai_agent_bot_fn(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
+    chat_engine = 'gpt-4o'
     global TOOLS_SCHEMA
     tools_schema = [obj for obj in TOOLS_SCHEMA if obj['function']['name'] in kwargs['tools']]
     messages.append({'role': 'user', 'content': message})
     import openai
     client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     resp = client.chat.completions.create(
-        model='gpt-4o',
+        model=chat_engine,
         messages=messages,
         tools = tools_schema,
         # **_kwargs,
@@ -178,19 +181,20 @@ def _openai_agent_bot_fn(message, history, **kwargs):
                 messages.append(bot_msg) # function_call_triggered_message
                 messages.append(function_call_result_message)
                 response = openai.chat.completions.create(
-                    model='gpt-4o',
+                    model=chat_engine,
                     messages=messages,
                 )
                 bot_message = render_message(dict(text=response.choices[0].message.content, details=details))
         except:
             bot_message = f'ERROR: Function call for {function_name} with arguments {arguments} failed.'
     messages.append({'role': 'assistant', 'content': bot_message})
+    _print_messages(messages, tag=f':: openai_agent ({chat_engine})')
     return bot_message
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
     
     system_prompt = kwargs.get('system_prompt', None)
-    # session_state = kwargs['session_state']
+    session_state = kwargs['session_state']
     chat_engine = 'gpt-4o'
 
     messages = history
@@ -205,8 +209,8 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(temperature=0, model=chat_engine)
     
-    tools = convert_tools_for_langchain(TOOLS)
-    # tools = [t for t in tools if t.name in kwargs['tools']]
+    from utils.tools_langchain import get_tools
+    tools = get_tools()
 
     from langchain.prompts import MessagesPlaceholder
     from langchain.memory import ConversationBufferMemory
@@ -215,14 +219,16 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
         "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
     }
 
-    memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
-    # for human, ai in history:
-    #     memory.save_context({"input": human}, {"output": ai})
-    for i, msg in enumerate(history): # NOTE: history, not messages (history with input)
-        if msg['role'] == 'user':
-            if len(history) > i+1 and history[i+1]['role'] == 'assistant':
-                memory.save_context({'input': msg['content']}, {'output': history[i+1]['content']})
-        # TODO: system
+    if 'memory' not in session_state:
+        session_state['memory'] = ConversationBufferMemory(memory_key="memory", return_messages=True)
+    memory = session_state['memory']
+    # # for human, ai in history:
+    # #     memory.save_context({"input": human}, {"output": ai})
+    # for i, msg in enumerate(history): # NOTE: history, not messages (history with input)
+    #     if msg['role'] == 'user':
+    #         if len(history) > i+1 and history[i+1]['role'] == 'assistant':
+    #             memory.save_context({'input': msg['content']}, {'output': history[i+1]['content']})
+    #     # TODO: system
     print(memory.load_memory_variables({}))
 
     mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
