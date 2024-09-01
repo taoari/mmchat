@@ -52,6 +52,12 @@ def _random_bot_fn(message, history, **kwargs):
         dict(text="📁 World.pdf", link="https://world.com", score=0.3),
     ])])
     samples['reference'] = render_message(target)
+    target = dict(text="Final results goes here", details=[dict(
+            title="🛠️ Show progress", content="Scratch pad goes here", before=True)])
+    samples['detail_before'] = render_message(target)
+    target = dict(text="Final results goes here", details=[dict(
+            title="🧠 Show progress", content="Scratch pad goes here", before=False)])
+    samples['detail'] = render_message(target)
     samples['markdown'] = """
 Hello **World**
 

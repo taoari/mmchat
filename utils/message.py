@@ -16,6 +16,21 @@ def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""
 
 MESSAGE_TEMPLATE = """
+{% if msg.details %}
+    <div class="details">
+    {% for detail in msg.details %}
+        {% if detail.before %}
+            <details>
+                <summary>{{ detail.title }}</summary>
+                <p>{{ detail.content }}</p>
+            </details>
+        {% endif %}
+    {% endfor %}
+    </div>
+{% endif %}
+
+{{ msg.text }}
+
 {% if msg.images %}
     <div class="images">
     {% for image in msg.images %}
@@ -105,6 +120,18 @@ MESSAGE_TEMPLATE = """
         {% endfor %}
     </div>
 {% endif %}
+{% if msg.details %}
+    <div class="details">
+    {% for detail in msg.details %}
+        {% if not detail.before %}
+            <details>
+                <summary>{{ detail.title }}</summary>
+                <p>{{ detail.content }}</p>
+            </details>
+        {% endif %}
+    {% endfor %}
+    </div>
+{% endif %}
 """
 
 def _basename(filepath):
@@ -114,7 +141,7 @@ def render_message(msg_dict, format='html'):
     if format == 'html':
         msg = re.sub(r'\n+', '\n', Template(MESSAGE_TEMPLATE, trim_blocks=True, lstrip_blocks=True).render(msg=msg_dict,
                 _prefix_local_file=_prefix_local_file, _basename=_basename)).strip()
-        msg = msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
+        # msg = msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
     elif format == 'plain':
         msg = msg_dict["text"] if "text" in msg_dict else ""
 
@@ -145,7 +172,7 @@ def render_message(msg_dict, format='html'):
 
 def parse_message(msg_html, cleanup=False):
     soup = BeautifulSoup(msg_html, "html.parser")
-    result = dict(text="", images=[], audios=[], videos=[], files=[], buttons=[], cards=[], references=[])
+    result = dict(text="", images=[], audios=[], videos=[], files=[], buttons=[], cards=[], references=[], details=[])
 
     if elem := soup.find("div", class_="images"):
         for img in elem.find_all("img"):
@@ -197,6 +224,13 @@ def parse_message(msg_html, cleanup=False):
                     src['score'] = float(li.text.split("score: ")[-1])
                 sources.append(src)
             result["references"].append({"title": ref_title, "sources": sources})
+
+    for details in soup.find_all("div", class_="details"):
+        if hasattr(details, 'details') and details.details:
+            title = details.details.summary.text.strip()
+            content = details.details.p.text.strip()
+            before = details.find_previous_sibling() is None  # Check if it appears before the main text
+            result["details"].append({"title": title, "content": content, "before": before})
 
     # extract div elements for clean text
     for unwanted in soup.select('div'):
@@ -252,6 +286,14 @@ def test_parse_message_references():
         dict(text="Hello", link="https://hello.com", score=0.5),
         dict(text="World", link="https://world.com"),
     ])])
+    assert target == parse_message(render_message(target), cleanup=True)
+
+def test_parse_message_details():
+    target = dict(text="Final results goes here", details=[dict(
+            title="Show progress", content="Scratch pad goes here", before=True)])
+    assert target == parse_message(render_message(target), cleanup=True)
+    target = dict(text="Final results goes here", details=[dict(
+            title="Show progress", content="Scratch pad goes here", before=False)])
     assert target == parse_message(render_message(target), cleanup=True)
 
 def _rerender_message(message, format='plain'):
