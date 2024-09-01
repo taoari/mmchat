@@ -7,6 +7,7 @@ def gradio_chat(message):
             message=message,
             system_prompt="You are a helpful customer support assistant. Use the supplied tools to assist the user.",
             chat_engine="agent",
+            tools=["get_delivery_date"],
             speech_synthesis=False,
             temperature=0.7,
             api_name="/chat"

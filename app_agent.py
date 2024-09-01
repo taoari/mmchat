@@ -31,6 +31,15 @@ llms.print = print
 # Globals
 ################################################################
 
+from utils import tools as TOOLS
+from tool2schema import FindToolEnabledSchemas
+TOOLS_SCHEMA = FindToolEnabledSchemas(TOOLS)
+print('Tools:\n' + json.dumps(TOOLS_SCHEMA, indent=2))
+
+# DIRECT_RESPONSE_TOOLS = ['get_delivery_date'] # use function output directly instead of LLM rewrite
+DIRECT_RESPONSE_TOOLS = [] # always rewrite function output with LLM
+AVAILABLE_TOOLS = [obj["function"]["name"] for obj in TOOLS_SCHEMA if obj["type"] == "function"]
+
 _default_session_state = dict(
         messages = [],
         context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
@@ -52,9 +61,12 @@ SETTINGS = {
     },
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
-        'system_prompt': dict(cls='Textbox', interactive=True, value=prompts.PROMPT_CHECK_DELIVERY_DATE, lines=5, label="System prompt"),
+        'system_prompt': dict(cls='Textbox', interactive=True, value=prompts.PROMPT_CHECK_DELIVERY_DATE.strip(), lines=5, label="System prompt"),
         'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'agent'], value='agent', 
                 interactive=True, label="Chat engine"),
+        'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
+                value=AVAILABLE_TOOLS,
+                interactive=True, label='Tools'),
         'speech_synthesis': dict(cls='Checkbox', value=False, 
                 interactive=True, label="Speech Synthesis"),
     },
@@ -68,14 +80,6 @@ COMPONENTS = {}
 
 COMPONENTS_EXCLUDED = {}
 EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
-
-from utils import tools
-from tool2schema import FindToolEnabledSchemas
-tools_schema = FindToolEnabledSchemas(tools)
-print('Tools:\n' + json.dumps(tools_schema, indent=2))
-
-# DIRECT_RESPONSE_TOOLS = ['get_delivery_date'] # use function output directly instead of LLM rewrite
-DIRECT_RESPONSE_TOOLS = [] # always rewrite function output with LLM
 
 ################################################################
 # Utils
@@ -127,7 +131,8 @@ from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 def _llm_call_tools(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
-    global tools_schema
+    global TOOLS_SCHEMA
+    tools_schema = [obj for obj in TOOLS_SCHEMA if obj['function']['name'] in kwargs['tools']]
     messages.append({'role': 'user', 'content': message})
     import openai
     client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -145,19 +150,19 @@ def _llm_call_tools(message, history, **kwargs):
         function_name = tool_call.function.name
         arguments = json.loads(tool_call.function.arguments)
         try:
-            result = getattr(tools, function_name)(**arguments)
+            result = getattr(TOOLS, function_name)(**arguments)
             
             function_call_desc = f"The function {function_name} was called with arguments {arguments}, returning result {result}."
             details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
 
             if function_name in DIRECT_RESPONSE_TOOLS:
-                bot_message = render_message(dict(text=tools.format_direct_response(function_name, result, arguments), details=details))
+                bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))
             else:
                 function_call_result_message = {
                     "role": "tool",
                     "content": json.dumps({
                         **arguments,
-                        **tools.format_returns(function_name, result)
+                        **TOOLS.format_returns(function_name, result)
                     }),
                     "tool_call_id": resp.choices[0].message.tool_calls[0].id
                 }
