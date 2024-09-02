@@ -29,10 +29,12 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def _print_messages(messages, title='Chat history:', tag=""):
+    from markdownify import markdownify
+    from utils.utils import replace_extra_newlines
     icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖'}
     res = [] if title is None else [title]
     for message in messages:
-        res.append(f'{icons[message["role"]]}: {message["content"]}')
+        res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
     out_str = '\n'.join(res) + '\n'
     print(f"{bcolors.OKGREEN}{out_str}{bcolors.WARNING}{tag}{bcolors.ENDC}")
 
@@ -101,11 +103,12 @@ def __llm_call_preprocess(message, history, **kwargs):
     system_prompt = kwargs.get('system_prompt', None)
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
 
-    messages = history
-    if message:
-        messages += [{'role': 'user', 'content': message}]
+    messages = []
     if system_prompt:
-        messages = [{'role': 'system', 'content': system_prompt}] + messages
+        messages.append({'role': 'system', 'content': system_prompt})
+    messages.extend(history)
+    if message:
+        messages.append({'role': 'user', 'content': message})
 
     import openai
     if chat_engine in LLM_ENDPOINTS:

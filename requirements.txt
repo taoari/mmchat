@@ -2,6 +2,7 @@ gradio<=4.40
 python-dotenv
 bs4
 jinja2
+markdownify
 
 # for LLM
 openai

@@ -1,5 +1,10 @@
 from functools import wraps
 import inspect
+import re
+
+def replace_extra_newlines(text):
+    # Replace more than two newlines (with possible whitespaces in between) with exactly two newlines
+    return re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
 
 def change_signature(arg_list, kwarg_dict={}):
     def decorator(fn):

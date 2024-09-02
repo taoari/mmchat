@@ -142,6 +142,10 @@ def render_message(msg_dict, format='html'):
         msg = re.sub(r'\n+', '\n', Template(MESSAGE_TEMPLATE, trim_blocks=True, lstrip_blocks=True).render(msg=msg_dict,
                 _prefix_local_file=_prefix_local_file, _basename=_basename)).strip()
         # msg = msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
+    elif format == 'markdown':
+        from markdownify import markdownify
+        from utils.utils import replace_extra_newlines
+        msg = replace_extra_newlines(markdownify(render_message(msg_dict, format='html')))
     elif format == 'plain':
         msg = msg_dict["text"] if "text" in msg_dict else ""
 
