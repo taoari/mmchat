@@ -33,7 +33,7 @@ class AgentChatInterface(ChatInterface):
         textbox, chatbot, chatbot_state, additional_inputs = self.textbox, self.chatbot, self.chatbot_state, self.additional_inputs
         submit_btn, retry_btn, undo_btn, clear_btn, upload_btn = self.submit_btn, self.retry_btn, self.undo_btn, self.clear_btn, self.upload_btn
         fake_response, fake_api_btn = self.fake_response, self.fake_api_btn
-        export_btn, export_btn_aux = self.export_btn, self.export_btn_aux
+        export_btn, export_btn_hidden = self.export_btn, self.export_btn_hidden
 
         # self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
@@ -47,7 +47,8 @@ class AgentChatInterface(ChatInterface):
             self._upload_fn, 
             [textbox, upload_btn], 
             [textbox], queue=False, api_name='upload')
-        export_btn.click(self._export, [chatbot], [export_btn_aux], api_name=False)
+        export_btn.click(self._export, [chatbot], [export_btn_hidden], api_name=False).then(
+            fn=None, inputs=None, outputs=None, js="() => document.querySelector('#export_btn_hidden').click()")
 
     def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         bot_msg = event_trigger(self.fn, [textbox, chatbot] + additional_inputs, [chatbot], api_name=api_name)

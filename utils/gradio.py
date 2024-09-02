@@ -68,8 +68,8 @@ class ChatInterface(gr.Blocks):
             retry_btn = gr.Button("Retry", scale=5, min_width=0)
             undo_btn = gr.Button("Undo", scale=5, min_width=0)
             clear_btn = gr.Button("Clear", scale=5, min_width=0)
-            export_btn = gr.DownloadButton("📥", scale=1, min_width=0, elem_id="export_btn")
-            export_btn_aux = gr.DownloadButton("Export", scale=1, min_width=0, elem_id="export_btn_aux", visible=False)
+            export_btn = gr.DownloadButton("📥", scale=1, min_width=0)
+            export_btn_hidden = gr.DownloadButton("Export", scale=1, min_width=0, elem_id="export_btn_hidden", visible=False)
 
         fake_api_btn = gr.Button("Fake API", visible=False)
         stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
@@ -90,7 +90,7 @@ class ChatInterface(gr.Blocks):
         self.undo_btn = undo_btn
         self.clear_btn = clear_btn
         self.export_btn = export_btn
-        self.export_btn_aux = export_btn_aux
+        self.export_btn_hidden = export_btn_hidden
 
         self.fake_response = fake_response
         self.fake_api_btn = fake_api_btn
@@ -101,7 +101,7 @@ class ChatInterface(gr.Blocks):
         textbox, chatbot, chatbot_state, additional_inputs = self.textbox, self.chatbot, self.chatbot_state, self.additional_inputs
         submit_btn, retry_btn, undo_btn, clear_btn, upload_btn = self.submit_btn, self.retry_btn, self.undo_btn, self.clear_btn, self.upload_btn
         fake_response, fake_api_btn = self.fake_response, self.fake_api_btn
-        export_btn, export_btn_aux = self.export_btn, self.export_btn_aux
+        export_btn, export_btn_hidden = self.export_btn, self.export_btn_hidden
 
         self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
@@ -115,7 +115,8 @@ class ChatInterface(gr.Blocks):
             self._upload_fn, 
             [textbox, upload_btn], 
             [textbox], queue=False, api_name='upload')
-        export_btn.click(self._export, [chatbot], [export_btn_aux], api_name=False)
+        export_btn.click(self._export, [chatbot], [export_btn_hidden], api_name=False).then(
+            fn=None, inputs=None, outputs=None, js="() => document.querySelector('#export_btn_hidden').click()")
 
     def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
@@ -252,14 +253,6 @@ function registerMessageButtons() {
 // need to make sure registerMessageButtons() is executed all the time as new message can come out;
 var intervalId = window.setInterval(function(){
   registerMessageButtons();
-}, 1000);
-
-setTimeout(function() {
-    document.getElementById("export_btn").addEventListener("click", function() {
-        setTimeout(function() {
-            document.getElementById("export_btn_aux").click();
-        }, 1000);
-    });
 }, 1000);
 
 </script>
