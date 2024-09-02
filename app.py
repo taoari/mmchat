@@ -51,7 +51,7 @@ SETTINGS = {
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
         'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'], value='auto', 
+        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), value='auto', 
                 interactive=True, label="Chat engine"),
         'speech_synthesis': dict(cls='Checkbox', value=False, 
                 interactive=True, label="Speech Synthesis"),
@@ -144,7 +144,7 @@ def bot_fn(message, history, *args):
         bot_message = {'random': _random_bot_fn,
             'gpt-3.5-turbo': _llm_call,
             'gpt-4o': _llm_call_stream,
-            }.get(kwargs['chat_engine'])(message, history, **kwargs)
+            }.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
     
     ##########################################################
     

@@ -2,6 +2,21 @@ import os
 import random
 from utils.message import render_message, get_spinner
 
+LLM_ENDPOINTS = {}
+
+def parse_endpoints_from_environ():
+    global LLM_ENDPOINTS
+    for key, value in os.environ.items():
+        if key.startswith('LLM_ENDPOINT_'):
+            name = key[len('LLM_ENDPOINT_'):].lower()
+            if ';' in value:
+                url, model = value.split(';')
+                LLM_ENDPOINTS[name.lower()] = dict(url=url, model=model)
+            else:
+                LLM_ENDPOINTS[name.lower()] = dict(url=value, model=name)
+
+parse_endpoints_from_environ()
+
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -80,7 +95,7 @@ Hello *World*
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=":: random")
     return bot_message
 
-def _llm_call(message, history, **kwargs):
+def __llm_call_preprocess(message, history, **kwargs):
     _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
                    max_tokens=kwargs.get('max_tokens', 1024))
     system_prompt = kwargs.get('system_prompt', None)
@@ -93,9 +108,21 @@ def _llm_call(message, history, **kwargs):
         messages = [{'role': 'system', 'content': system_prompt}] + messages
 
     import openai
-    client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    if chat_engine in LLM_ENDPOINTS:
+        endpoint = LLM_ENDPOINTS[chat_engine]
+        client = openai.OpenAI(base_url=f"{endpoint['url']}/v1", api_key='-')
+        model_id = endpoint['model']
+    else:
+        client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        model_id = chat_engine
+
+    return client, model_id, messages, _kwargs
+
+def _llm_call(message, history, **kwargs):
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
-        model=chat_engine,
+        model=model_id,
         messages=messages,
         **_kwargs,
     )
@@ -104,21 +131,10 @@ def _llm_call(message, history, **kwargs):
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
-    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
-                   max_tokens=kwargs.get('max_tokens', 1024))
-    system_prompt = kwargs.get('system_prompt', None)
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
-
-    messages = history
-    if message:
-        messages += [{'role': 'user', 'content': message}]
-    if system_prompt:
-        messages = [{'role': 'system', 'content': system_prompt}] + messages
-
-    import openai
-    client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
-        model=chat_engine,
+        model=model_id,
         messages=messages,
         stream=True,
         **_kwargs,
