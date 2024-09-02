@@ -111,8 +111,9 @@ def _create_from_dict(PARAMS, tabbed=False):
     return params
 
 def _clear(session_state):
+    import copy
     session_state.clear()
-    session_state.update(_default_session_state)
+    session_state.update(copy.deepcopy(_default_session_state))
     return session_state
 
 def _show_status(*args):
@@ -139,56 +140,91 @@ def _speech_synthesis(text):
 
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
 
+def __helper_fn():
+    import openai
+    if True:
+        client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        model_id = 'gpt-4o'
+    else:
+        client = openai.OpenAI(base_url='http://localhost:8080/v1', api_key='-')
+        model_id = 'jsincn/phi-3-mini-128k-instruct-awq'
+    return client, model_id
+
 def _openai_agent_bot_fn(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
-    chat_engine = 'gpt-4o'
     global TOOLS_SCHEMA
     tools_schema = [obj for obj in TOOLS_SCHEMA if obj['function']['name'] in kwargs['tools']]
     messages.append({'role': 'user', 'content': message})
-    import openai
-    client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    resp = client.chat.completions.create(
-        model=chat_engine,
-        messages=messages,
-        tools = tools_schema,
-        # **_kwargs,
-    )
-    bot_msg = resp.choices[0].message
+
+    client, model_id = __helper_fn()
+
+    try:
+        # NOTE: TGI tools can have parse error in this call
+        resp = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            tools = tools_schema,
+            # **_kwargs,
+        )
+        bot_msg = resp.choices[0].message
+    except:
+        resp = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            # tools = tools_schema,
+            # **_kwargs,
+        )
+        bot_msg = resp.choices[0].message
+
+    # NOTE: openai is smart enough, if tools are not needed, then bot_msg.tool_calls is None
+    # TGI tools support is primitive, always returns tool_calls, but with different function name and arguments.
     if bot_msg.tool_calls is None:
         bot_message = bot_msg.content
     else:
         tool_call = bot_msg.tool_calls[0]
         function_name = tool_call.function.name
-        arguments = json.loads(tool_call.function.arguments)
-        try:
-            result = getattr(TOOLS, function_name)(**arguments)
-            
-            function_call_desc = f"The function {function_name} was called with arguments {arguments}, returning result {result}."
-            details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
+        arguments = tool_call.function.arguments
+        arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+        if not hasattr(TOOLS, function_name): # also need to check signature match
+            # NOTE: TGI tools only, means function call is not needed
+            # need to apply to llm trained with LLM function call, otherwise, gives wrong name e.g CheckDeliveryName
+            resp = client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                # tools = tools_schema,
+                # **_kwargs,
+            )
+            bot_message = resp.choices[0].message.content
+        else:
+            try:
+                result = getattr(TOOLS, function_name)(**arguments)
+                
+                function_call_desc = f"The function {function_name} was called with arguments {arguments}, returning result {result}."
+                details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
 
-            if function_name in DIRECT_RESPONSE_TOOLS:
-                bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))
-            else:
-                function_call_result_message = {
-                    "role": "tool",
-                    "content": json.dumps({
-                        **arguments,
-                        **TOOLS.format_returns(function_name, result)
-                    }),
-                    "tool_call_id": resp.choices[0].message.tool_calls[0].id
-                }
-                messages.append(bot_msg) # function_call_triggered_message
-                messages.append(function_call_result_message)
-                response = openai.chat.completions.create(
-                    model=chat_engine,
-                    messages=messages,
-                )
-                bot_message = render_message(dict(text=response.choices[0].message.content, details=details))
-        except:
-            bot_message = f'ERROR: Function call for {function_name} with arguments {arguments} failed.'
+                if function_name in DIRECT_RESPONSE_TOOLS:
+                    bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))
+                else:
+                    function_call_result_message = {
+                        "role": "tool",
+                        "content": json.dumps({
+                            **arguments,
+                            **TOOLS.format_returns(function_name, result)
+                        }),
+                        "tool_call_id": resp.choices[0].message.tool_calls[0].id
+                    }
+                    messages.append(bot_msg) # function_call_triggered_message
+                    messages.append(function_call_result_message)
+                    response = client.chat.completions.create(
+                        model=model_id,
+                        messages=messages,
+                    )
+                    bot_message = render_message(dict(text=response.choices[0].message.content, details=details))
+            except:
+                bot_message = f'ERROR: Function call for {function_name} with arguments {arguments} failed.'
     messages.append({'role': 'assistant', 'content': bot_message})
-    _print_messages(messages, tag=f':: openai_agent ({chat_engine})')
+    _print_messages(messages, tag=f':: openai_agent ({model_id})')
     return bot_message
 
 def _langchain_agent_bot_fn(message, history, **kwargs):

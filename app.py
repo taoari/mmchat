@@ -86,8 +86,9 @@ def _create_from_dict(PARAMS, tabbed=False):
     return params
 
 def _clear(session_state):
+    import copy
     session_state.clear()
-    session_state.update(_default_session_state)
+    session_state.update(copy.deepcopy(_default_session_state))
     return session_state
 
 def _show_status(*args):
