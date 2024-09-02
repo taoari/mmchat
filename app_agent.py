@@ -222,13 +222,6 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     if 'memory' not in session_state:
         session_state['memory'] = ConversationBufferMemory(memory_key="memory", return_messages=True)
     memory = session_state['memory']
-    # # for human, ai in history:
-    # #     memory.save_context({"input": human}, {"output": ai})
-    # for i, msg in enumerate(history): # NOTE: history, not messages (history with input)
-    #     if msg['role'] == 'user':
-    #         if len(history) > i+1 and history[i+1]['role'] == 'assistant':
-    #             memory.save_context({'input': msg['content']}, {'output': history[i+1]['content']})
-    #     # TODO: system
     print(memory.load_memory_variables({}))
 
     mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
