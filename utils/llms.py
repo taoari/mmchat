@@ -35,7 +35,10 @@ def _print_messages(messages, title='Chat history:', tag=""):
     res = [] if title is None else [title]
     for message in messages:
         try:
-            res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
+            if 'tool_calls' in message and message['tool_calls']:
+                res.append(f'{icons[message["role"]]}: {message["tool_calls"]}')
+            else:
+                res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
         except:
             res.append(f'{icons["think"]}: {message}') # think is assistant of function calling
     out_str = '\n'.join(res) + '\n'

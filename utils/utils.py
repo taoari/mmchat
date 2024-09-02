@@ -6,6 +6,21 @@ def replace_extra_newlines(text):
     # Replace more than two newlines (with possible whitespaces in between) with exactly two newlines
     return re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
 
+def recursive_apply_to_dict_values(d, func):
+    if isinstance(d, dict):
+        return {k: recursive_apply_to_dict_values(v, func) for k, v in d.items()}
+    elif isinstance(d, list):
+        return [recursive_apply_to_dict_values(item, func) for item in d]
+    else:
+        return func(d)
+    
+def recursive_to_dict(v):
+    def _convert(item):
+        if hasattr(item, '__dict__'):
+            return item.__dict__
+        return item
+    return recursive_apply_to_dict_values(v, _convert)
+
 def change_signature(arg_list, kwarg_dict={}):
     def decorator(fn):
         # Create a signature from arg_list and kwarg_dict

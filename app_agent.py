@@ -206,15 +206,17 @@ def _openai_agent_bot_fn(message, history, **kwargs):
                 if function_name in DIRECT_RESPONSE_TOOLS:
                     bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))
                 else:
-                    function_call_result_message = {
-                        "role": "tool",
-                        "content": json.dumps({
-                            **arguments,
-                            **TOOLS.format_returns(function_name, result)
-                        }),
-                        "tool_call_id": resp.choices[0].message.tool_calls[0].id
-                    }
-                    messages.append(bot_msg) # function_call_triggered_message
+                    # function_call_result_message = {
+                    #     "role": "tool",
+                    #     "content": json.dumps({
+                    #         **arguments,
+                    #         **TOOLS.format_returns(function_name, result)
+                    #     }),
+                    #     "tool_call_id": resp.choices[0].message.tool_calls[0].id
+                    # }
+                    # messages.append(bot_msg) # function_call_triggered_message
+                    function_call_result_message = {"role": 'tool', "content": str(result), "tool_call_id": resp.choices[0].message.tool_calls[0].id}
+                    messages.append(json.loads(bot_msg.to_json())) # function_call_triggered_message
                     messages.append(function_call_result_message)
                     response = client.chat.completions.create(
                         model=model_id,
