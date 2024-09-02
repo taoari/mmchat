@@ -201,7 +201,7 @@ def _openai_agent_bot_fn(message, history, **kwargs):
                 result = getattr(TOOLS, function_name)(**arguments)
                 
                 function_call_desc = f"The function {function_name} was called with arguments {arguments}, returning result {result}."
-                details = [{"title": f"🛠️ Use tool: {function_name}", "content": function_call_desc, "before": True}]
+                details = [{"title": f"🧠 Use tool: {function_name}", "content": function_call_desc, "before": True}]
 
                 if function_name in DIRECT_RESPONSE_TOOLS:
                     bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))

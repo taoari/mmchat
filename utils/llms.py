@@ -31,7 +31,7 @@ class bcolors:
 def _print_messages(messages, title='Chat history:', tag=""):
     from markdownify import markdownify
     from utils.utils import replace_extra_newlines
-    icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖', 'tool': '🛠️', 'think': '🧠'}
+    icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖', 'tool': '🛠️', 'think': '🧠', 'message': '💬'}
     res = [] if title is None else [title]
     for message in messages:
         try:
@@ -40,7 +40,7 @@ def _print_messages(messages, title='Chat history:', tag=""):
             else:
                 res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
         except:
-            res.append(f'{icons["think"]}: {message}') # think is assistant of function calling
+            res.append(f'{icons["message"]}: {message}') # think is assistant of function calling
     out_str = '\n'.join(res) + '\n'
     print(f"{bcolors.OKGREEN}{out_str}{bcolors.WARNING}{tag}{bcolors.ENDC}")
 
