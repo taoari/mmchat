@@ -140,7 +140,7 @@ def _speech_synthesis(text):
 def prebuild_vectorstores(args):
     from utils.vectorstore import _build_vs_collection
     autogen_yaml = args.autogen_yaml
-    CACHE['vectorstores']['audio2face'] = _build_vs_collection('data/collections/audio2face', 'audio2face', 
+    CACHE['vectorstores']['default'] = _build_vs_collection('data/collections/default', 'default', 
             autogen_yaml=autogen_yaml, verbose=True)
 
 ################################################################
@@ -280,7 +280,7 @@ def _format_doc(doc, score):
     return dict(text=f"📁 {os.path.split(_f)[-1]}", link=_prefix_local_file(_f), score=score)
     
 def _rag_bot_fn(message, history, **kwargs):
-    collection = kwargs.get('collection', 'audio2face')
+    collection = kwargs.get('collection', 'default')
     chat_engine = 'gpt-3.5-turbo'
     vectordb = CACHE['vectorstores'][collection]
 

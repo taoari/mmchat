@@ -188,7 +188,7 @@ def _build_vs_collection(folder: str, collection_name: str, chunk_size: int = 0,
 
 if __name__ == '__main__':
     load_dotenv()
-    vectordb = _build_vs_collection('data/collections/audio2face', 'audio2face', autogen_yaml=True, verbose=True)
+    vectordb = _build_vs_collection('data/collections/default', 'default', autogen_yaml=True, verbose=True)
 
     # similarity search
     message = 'Please help me to summarize the FaceFormer paper'
