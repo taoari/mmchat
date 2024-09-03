@@ -1,32 +1,41 @@
 import os
+import re
 import warnings
 import hashlib
-from collections import defaultdict
 import glob
+from collections import defaultdict
+
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-
 from ruamel.yaml.representer import RoundTripRepresenter
 from ruamel.yaml import YAML
 
+
 def repr_str(dumper: RoundTripRepresenter, data: str):
+    """Represent a string in YAML format."""
     if '\n' in data:
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
 
 yaml = YAML()
 yaml.representer.add_representer(str, repr_str)
 
 
-def _get_hash(content, is_file=False):
+def remove_non_printable(s: str) -> str:
+    """Remove non-printable characters from a string."""
+    return re.sub(r'[^\x20-\x7E]', '', s)
+
+
+def _get_hash(content: str, is_file: bool = False) -> str:
     """Generate an MD5 hash for a string or a file."""
     if is_file:
-        with open(content, "rb") as f:
+        with open(content, "rb") as file:
             file_hash = hashlib.md5()
-            while chunk := f.read(8192):
+            while chunk := file.read(8192):
                 file_hash.update(chunk)
             return file_hash.hexdigest()
     return hashlib.md5(content.encode('utf8')).hexdigest()
@@ -34,7 +43,7 @@ def _get_hash(content, is_file=False):
 
 def _initialize_embedding():
     """Initialize the embedding function, using a custom endpoint if specified in the environment."""
-    hf_endpoint = os.environ.get("HF_EMBEDDINGS_ENDPOINT")
+    hf_endpoint = os.getenv("HF_EMBEDDINGS_ENDPOINT")
     if hf_endpoint:
         from langchain_huggingface.embeddings import HuggingFaceEndpointEmbeddings
         return HuggingFaceEndpointEmbeddings(model=hf_endpoint)
@@ -42,7 +51,7 @@ def _initialize_embedding():
     return HuggingFaceEmbeddings()
 
 
-def _split_documents(pages, chunk_size):
+def _split_documents(pages, chunk_size: int):
     """Split documents into chunks if chunk_size is greater than 0."""
     if chunk_size > 0:
         splitter = RecursiveCharacterTextSplitter(
@@ -61,16 +70,28 @@ def _deduplicate_documents(docs, vectordb):
     return {_id: doc for _id, doc in zip(ids, docs) if _id not in existing_ids}
 
 
-def _build_vs(fname, chunk_size=0, persist_directory=None, collection_name=None, max_pages=0, autogen_yaml=False, verbose=False):
+def _build_vs(fname: str, chunk_size: int = 0, persist_directory: str = None, collection_name: str = None,
+              max_pages: int = 0, autogen_yaml: bool = False, verbose: bool = False) -> Chroma:
     """Build a vector store from a PDF file."""
-    loader = PyPDFLoader(fname)
-    pages = loader.load()
+    base_fname = os.path.splitext(fname)[0]
+
+    if os.path.exists(base_fname + '.yaml'):
+        with open(base_fname + '.yaml', 'rb') as f:
+            _pages = yaml.load(f)
+            from langchain_core.documents import Document
+            pages = [Document(metadata=_page["metadata"], page_content=_page["page_content"]) for _page in _pages["pages"]]
+    else:
+        loader = PyPDFLoader(fname)
+        pages = loader.load()
+
     if autogen_yaml:
-        yaml_fname = os.path.splitext(fname)[0] + '.autogen.yaml'
-        with open(yaml_fname, 'w', encoding='utf-8') as f:
-            _pages = [dict(metadata=page.metadata, page_content=page.page_content) for page in pages]
-            # yaml.safe_dump(_pages, f)
+        yaml_fname = base_fname + '.autogen.yaml'
+        with open(yaml_fname, 'wb') as f:
+            _pages = {'pages': [dict(metadata=page.metadata, page_content=remove_non_printable(page.page_content)) for page in pages]}
             yaml.dump(_pages, f)
+        # Validate the YAML file by reading it again
+        with open(yaml_fname, 'rb') as f:
+            yaml.load(f)
 
     docs = _split_documents(pages, chunk_size)
 
@@ -99,7 +120,7 @@ def _build_vs(fname, chunk_size=0, persist_directory=None, collection_name=None,
     )
 
     if verbose:
-        print(f"vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
+        print(f"Vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
 
     # Deduplicate documents
     docs_dedup = _deduplicate_documents(docs, vectordb)
@@ -118,18 +139,19 @@ def _build_vs(fname, chunk_size=0, persist_directory=None, collection_name=None,
         vectordb.persist()
 
     if verbose:
-        print(f"updated vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
+        print(f"Updated vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
 
     return vectordb
 
 
-def _load_vs(persist_directory=None):
+def _load_vs(persist_directory: str = None) -> Chroma:
     """Load an existing vector store."""
     embedding = HuggingFaceEmbeddings()
     return Chroma(embedding_function=embedding, persist_directory=persist_directory)
 
 
-def _build_vs_collection(folder, collection_name, chunk_size=0, persist_directory=None, max_pages=0, autogen_yaml=False, verbose=False):
+def _build_vs_collection(folder: str, collection_name: str, chunk_size: int = 0, persist_directory: str = None,
+                         max_pages: int = 0, autogen_yaml: bool = False, verbose: bool = False) -> Chroma:
     """Build a vector store for all PDFs in a folder."""
     if not os.path.exists(folder):
         return None
