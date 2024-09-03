@@ -4,6 +4,7 @@ import warnings
 import hashlib
 import glob
 from collections import defaultdict
+from datetime import datetime
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
@@ -12,6 +13,7 @@ from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from ruamel.yaml.representer import RoundTripRepresenter
 from ruamel.yaml import YAML
+from utils.pdf import _get_pdf_metadata, _convert_pdf_datetime
 
 
 def repr_str(dumper: RoundTripRepresenter, data: str):
@@ -20,7 +22,6 @@ def repr_str(dumper: RoundTripRepresenter, data: str):
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
-
 yaml = YAML()
 yaml.representer.add_representer(str, repr_str)
 
@@ -28,6 +29,11 @@ yaml.representer.add_representer(str, repr_str)
 def remove_non_printable(s: str) -> str:
     """Remove non-printable characters from a string."""
     return re.sub(r'[^\x20-\x7E]', '', s)
+
+
+def get_pdf_metadata(filename):
+    metadata = _get_pdf_metadata(filename)
+    return {'created_at': str(_convert_pdf_datetime(metadata['CreationDate'])) if metadata['CreationDate'] else None}
 
 
 def _get_hash(content: str, is_file: bool = False) -> str:
@@ -69,6 +75,14 @@ def _deduplicate_documents(docs, vectordb):
     existing_ids = set(vectordb.get()['ids'])
     return {_id: doc for _id, doc in zip(ids, docs) if _id not in existing_ids}
 
+def _autogen_yaml(fname, pages):
+    yaml_fname = os.path.splitext(fname)[0] + '.autogen.yaml'
+    with open(yaml_fname, 'wb') as f:
+        _pages = {'pages': [dict(metadata=page.metadata, page_content=remove_non_printable(page.page_content)) for page in pages]}
+        yaml.dump(_pages, f)
+    # Validate the YAML file by reading it again
+    with open(yaml_fname, 'rb') as f:
+        yaml.load(f)
 
 def _build_vs(fname: str, chunk_size: int = 0, persist_directory: str = None, collection_name: str = None,
               max_pages: int = 0, autogen_yaml: bool = False, verbose: bool = False) -> Chroma:
@@ -84,14 +98,13 @@ def _build_vs(fname: str, chunk_size: int = 0, persist_directory: str = None, co
         loader = PyPDFLoader(fname)
         pages = loader.load()
 
+        pdf_metadata = get_pdf_metadata(fname)
+        for i, page in enumerate(pages):
+            page.metadata['page_to'] = i+1
+            page.metadata.update(pdf_metadata)
+
     if autogen_yaml:
-        yaml_fname = base_fname + '.autogen.yaml'
-        with open(yaml_fname, 'wb') as f:
-            _pages = {'pages': [dict(metadata=page.metadata, page_content=remove_non_printable(page.page_content)) for page in pages]}
-            yaml.dump(_pages, f)
-        # Validate the YAML file by reading it again
-        with open(yaml_fname, 'rb') as f:
-            yaml.load(f)
+        _autogen_yaml(fname, pages)
 
     docs = _split_documents(pages, chunk_size)
 
@@ -176,7 +189,7 @@ def _build_vs_collection(folder: str, collection_name: str, chunk_size: int = 0,
 if __name__ == '__main__':
     load_dotenv()
     vectordb = _build_vs_collection('data/collections/audio2face', 'audio2face', autogen_yaml=True, verbose=True)
-    
+
     # similarity search
     message = 'Please help me to summarize the FaceFormer paper'
     docs = vectordb.similarity_search_with_score(message, k=3)
