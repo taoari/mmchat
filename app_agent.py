@@ -14,6 +14,8 @@ from utils.message import parse_message, render_message, _rerender_message, _rer
 ################################################################
 
 from dotenv import load_dotenv
+from langchain_core.prompts import MessagesPlaceholder
+from langchain_core.tools import Tool
 
 load_dotenv()  # take environment variables from .env.
 
@@ -241,7 +243,7 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     if system_prompt:
         messages = [{'role': 'system', 'content': system_prompt}] + messages
 
-    from langchain.agents import initialize_agent, Tool
+    from langchain.agents import initialize_agent
     from langchain.agents import AgentType
 
     from langchain_openai import ChatOpenAI
@@ -249,8 +251,6 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     
     from utils.tools_langchain import get_tools
     tools = get_tools()
-
-    from langchain.prompts import MessagesPlaceholder
     from langchain.memory import ConversationBufferMemory
 
     agent_kwargs = {

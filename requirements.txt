@@ -6,9 +6,19 @@ markdownify
 
 # for LLM
 openai
+huggingface_hub
+
 langchain
-langchain_openai
 langchain_community
+langchain_openai
+langchain_huggingface
+
+# for RAG
+# sentence-transformers # depends on torch, which is large
+pypdf
+chromadb
+langchain_text_splitters
+langchain_chroma
 
 # for Azure
 azure-cognitiveservices-speech
