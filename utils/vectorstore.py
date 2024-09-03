@@ -9,6 +9,17 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+from ruamel.yaml.representer import RoundTripRepresenter
+from ruamel.yaml import YAML
+
+def repr_str(dumper: RoundTripRepresenter, data: str):
+    if '\n' in data:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+yaml = YAML()
+yaml.representer.add_representer(str, repr_str)
+
 
 def _get_hash(content, is_file=False):
     """Generate an MD5 hash for a string or a file."""
@@ -50,10 +61,17 @@ def _deduplicate_documents(docs, vectordb):
     return {_id: doc for _id, doc in zip(ids, docs) if _id not in existing_ids}
 
 
-def _build_vs(fname, chunk_size=0, persist_directory=None, collection_name=None, max_pages=0, verbose=False):
+def _build_vs(fname, chunk_size=0, persist_directory=None, collection_name=None, max_pages=0, autogen_yaml=False, verbose=False):
     """Build a vector store from a PDF file."""
     loader = PyPDFLoader(fname)
     pages = loader.load()
+    if autogen_yaml:
+        yaml_fname = os.path.splitext(fname)[0] + '.autogen.yaml'
+        with open(yaml_fname, 'w', encoding='utf-8') as f:
+            _pages = [dict(metadata=page.metadata, page_content=page.page_content) for page in pages]
+            # yaml.safe_dump(_pages, f)
+            yaml.dump(_pages, f)
+
     docs = _split_documents(pages, chunk_size)
 
     if verbose:
@@ -111,7 +129,7 @@ def _load_vs(persist_directory=None):
     return Chroma(embedding_function=embedding, persist_directory=persist_directory)
 
 
-def _build_vs_collection(folder, collection_name, chunk_size=0, persist_directory=None, max_pages=0, verbose=False):
+def _build_vs_collection(folder, collection_name, chunk_size=0, persist_directory=None, max_pages=0, autogen_yaml=False, verbose=False):
     """Build a vector store for all PDFs in a folder."""
     if not os.path.exists(folder):
         return None
@@ -126,6 +144,7 @@ def _build_vs_collection(folder, collection_name, chunk_size=0, persist_director
             persist_directory=persist_directory,
             collection_name=collection_name,
             max_pages=max_pages,
+            autogen_yaml=autogen_yaml,
             verbose=verbose
         )
 
@@ -134,4 +153,4 @@ def _build_vs_collection(folder, collection_name, chunk_size=0, persist_director
 
 if __name__ == '__main__':
     load_dotenv()
-    vectordb = _build_vs_collection('data/collections/audio2face', 'audio2face', verbose=True)
+    vectordb = _build_vs_collection('data/collections/audio2face', 'audio2face', autogen_yaml=True, verbose=True)

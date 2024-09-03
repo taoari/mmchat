@@ -16,6 +16,7 @@ langchain_huggingface
 # for RAG
 # sentence-transformers # depends on torch, which is large
 pypdf
+ruamel.yaml
 chromadb
 langchain_text_splitters
 langchain_chroma
