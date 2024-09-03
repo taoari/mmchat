@@ -176,3 +176,10 @@ def _build_vs_collection(folder: str, collection_name: str, chunk_size: int = 0,
 if __name__ == '__main__':
     load_dotenv()
     vectordb = _build_vs_collection('data/collections/audio2face', 'audio2face', autogen_yaml=True, verbose=True)
+    
+    # similarity search
+    message = 'Please help me to summarize the FaceFormer paper'
+    docs = vectordb.similarity_search_with_score(message, k=3)
+    scores = [1.0 - _r[1] for _r in docs] # extract scores
+    docs = [_r[0] for _r in docs]
+    print([doc.metadata for doc in docs])
