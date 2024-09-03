@@ -7,7 +7,7 @@ import jinja2
 import pprint
 import gradio as gr
 
-from utils.message import parse_message, render_message, _rerender_message, _rerender_history
+from utils.message import parse_message, render_message, _rerender_message, _rerender_history, _prefix_local_file
 
 ################################################################
 # Load .env and logging
@@ -64,7 +64,7 @@ SETTINGS = {
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
         'system_prompt': dict(cls='Textbox', interactive=True, value=prompts.PROMPT_CHECK_DELIVERY_DATE.strip(), lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent'], value='openai_agent', 
+        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent', 'rag'], value='openai_agent', 
                 interactive=True, label="Chat engine"),
         'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
                 value=AVAILABLE_TOOLS,
@@ -83,12 +83,13 @@ COMPONENTS = {}
 COMPONENTS_EXCLUDED = {}
 EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
 
+CACHE = {"vectorstores": {}}
+
 ################################################################
 # Utils
 ################################################################
 
 def convert_tools_for_langchain(TOOLS):
-    import pdb; pdb.set_trace()
     from langchain_core.tools import Tool, StructuredTool
     
     functions = tool2schema.FindToolEnabled(TOOLS)
@@ -135,6 +136,12 @@ def _speech_synthesis(text):
         speech_synthesis(text=text)
     except Exception as e:
         print(f"Speaker is not supported: {e}")
+
+def prebuild_vectorstores(args):
+    from utils.vectorstore import _build_vs_collection
+    autogen_yaml = args.autogen_yaml
+    CACHE['vectorstores']['audio2face'] = _build_vs_collection('data/collections/audio2face', 'audio2face', 
+            autogen_yaml=autogen_yaml, verbose=True)
 
 ################################################################
 # Bot fn
@@ -268,6 +275,28 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
     return bot_message
 
+def _format_doc(doc, score):
+    _f = f"{doc.metadata['source']}#page={doc.metadata['page'] + 1}"
+    return dict(text=f"📁 {os.path.split(_f)[-1]}", link=_prefix_local_file(_f), score=score)
+    
+def _rag_bot_fn(message, history, **kwargs):
+    collection = kwargs.get('collection', 'audio2face')
+    chat_engine = 'gpt-3.5-turbo'
+    vectordb = CACHE['vectorstores'][collection]
+
+    # similarity search
+    docs = vectordb.similarity_search_with_score(message, k=3)
+    scores = [1.0 - _r[1] for _r in docs] # extract scores
+    docs = [_r[0] for _r in docs]
+
+    # llm rag
+    system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
+    _kwargs = {**kwargs, 'chat_engine': chat_engine, 'system_prompt': system_prompt} # overwrite system_prompt
+    sources = [_format_doc(doc, score) for doc, score in zip(docs, scores)]
+    bot_message = llms._llm_call_stream(message, history, **_kwargs)
+    for chunk in bot_message:
+        yield render_message({'text': chunk, 'references': [dict(title="Sources", sources=sources)]})
+
 def _slash_bot_fn(message, history, **kwargs):
     cmds = message[1:].split(' ', maxsplit=1)
     cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
@@ -300,6 +329,7 @@ def bot_fn(message, history, *args):
             'gpt-4o': _llm_call_stream,
             'openai_agent': _openai_agent_bot_fn,
             'langchain_agent': _langchain_agent_bot_fn,
+            'rag': _rag_bot_fn,
             }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     ##########################################################
@@ -379,6 +409,9 @@ def parse_args():
     parser.add_argument(
         '--debug', action='store_true', 
         help='debug mode.')
+    parser.add_argument(
+        '--autogen-yaml', action='store_true', 
+        help='auto generate yaml files for PDF files.')
 
     args = parser.parse_args()
     return args
@@ -386,6 +419,9 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+
+    prebuild_vectorstores(args)
+    gr.set_static_paths(paths=["data/collections"])
 
     demo = get_demo()
     from utils.gradio import reload_javascript

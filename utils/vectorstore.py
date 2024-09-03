@@ -196,3 +196,10 @@ if __name__ == '__main__':
     scores = [1.0 - _r[1] for _r in docs] # extract scores
     docs = [_r[0] for _r in docs]
     print([doc.metadata for doc in docs])
+    print(scores)
+
+    # llm rag
+    import jinja2
+    from utils import prompts, llms
+    system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
+    print(llms._llm_call(message, [], system_prompt=system_prompt))

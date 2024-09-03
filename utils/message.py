@@ -61,7 +61,7 @@ MESSAGE_TEMPLATE = """
 {% if msg.files %}
     <div class="files">
     {% for file in msg.files %}
-        <a href="{{ _prefix_local_file(file) }}">📁 {{ _basename(file) }}</a>
+        <a href="{{ _prefix_local_file(file) }}" target="_blank">📁 {{ _basename(file) }}</a>
     {% endfor %}
     </div>
 {% endif %}
@@ -109,9 +109,9 @@ MESSAGE_TEMPLATE = """
             <b>{{ ref.title }}</b>
             <ol>
             {% for source in ref.sources %}
-                <li><a href="{{ source.link }}">{{ source.text }}</a> 
+                <li><a href="{{ source.link }}" target="_blank">{{ source.text }}</a> 
                 {% if source.score %}
-                    <code>score: {{ source.score }}</code>
+                    <code>score: {{ source.score | float | round(2) }}</code>
                 {% endif %}
                 </li>
             {% endfor %}
