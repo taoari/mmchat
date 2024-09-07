@@ -7,6 +7,7 @@ import pprint
 import gradio as gr
 
 from utils.message import parse_message, render_message, _rerender_message, _rerender_history
+from utils.gradio import reload_javascript
 
 ################################################################
 # Load .env and logging
@@ -285,10 +286,33 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.env == 'prod':
+    if args.env in ['dev', 'prod']:
+        if args.env == 'prod':
+            demo = get_demo_prod()
+        else:
+            demo = get_demo()
+        reload_javascript()
+        demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
+
+    elif args.env == 'prod_fastapi':
+        from fastapi import FastAPI
+        from fastapi.responses import HTMLResponse
+        import gradio as gr
+
+        app = FastAPI()
+
+        @app.get("/", response_class=HTMLResponse)
+        def index():
+            with open('assets/webchat.gradio.html') as f:
+                index_html = f.read().replace("http://localhost:7860", f"http://localhost:{args.port}/demo")
+            return index_html
+        
         demo = get_demo_prod()
+        reload_javascript()
+        app = gr.mount_gradio_app(app, demo, path='/demo')
+
+        import uvicorn
+        uvicorn.run(app, port=args.port)
+
     else:
-        demo = get_demo()
-    from utils.gradio import reload_javascript
-    reload_javascript()
-    demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
+        raise ValueError(f"Invalid environment: {args.env}")
