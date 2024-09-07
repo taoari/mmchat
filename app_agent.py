@@ -1,4 +1,4 @@
-# app.py : Multimodal Chatbot
+# app.py: Multimodal Chatbot
 import os
 import json
 import time
@@ -7,31 +7,19 @@ import jinja2
 import pprint
 import gradio as gr
 
-from utils.message import parse_message, render_message, _rerender_message, _rerender_history, _prefix_local_file
-
-################################################################
-# Load .env and logging
-################################################################
-
+from utils.message import parse_message, render_message, _prefix_local_file
 from dotenv import load_dotenv
-from langchain_core.prompts import MessagesPlaceholder
-from langchain_core.tools import Tool
+from utils import prompts, llms
+from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
 
-load_dotenv()  # take environment variables from .env.
+# Load environment variables from .env file
+load_dotenv()
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
-
-def print(*args, **kwargs):
-    sep = kwargs['sep'] if 'sep' in kwargs else ' '
-    logger.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
-
-from utils import llms, prompts
-llms.print = print
-
-################################################################
-# Globals
-################################################################
+# Default session state
+_default_session_state = {
+    'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
+    'messages': [],
+}
 
 from utils import tools as TOOLS
 import tool2schema
@@ -42,113 +30,27 @@ print('Tools:\n' + json.dumps(TOOLS_SCHEMA, indent=2))
 DIRECT_RESPONSE_TOOLS = [] # always rewrite function output with LLM
 AVAILABLE_TOOLS = [obj["function"]["name"] for obj in TOOLS_SCHEMA if obj["type"] == "function"]
 
-_default_session_state = dict(
-        messages = [],
-        context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
-        message=None,
-        previous_message=None,
-    )
+from app import SETTINGS
+SETTINGS['Settings']['chat_engine'] = {
+            'cls': 'Dropdown', 
+            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent'], 
+            'value': 'openai_agent', 
+            'interactive': True, 
+            'label': "Chat Engine"
+        }
 
-TITLE = """ Gradio Multimodal Chatbot Template """
-
-DESCRIPTION = """Welcome
-"""
-
-SETTINGS = {
-    'Info': {
-        '__metadata': {'open': False, 'tabbed': False},
-        'session_state': dict(cls='State', value=_default_session_state),
-        'status': dict(cls='JSON', label='Status'),
-        'show_status_btn': dict(cls='Button', value='Show')
-    },
-    'Settings': {
-        '__metadata': {'open': True, 'tabbed': False},
-        'system_prompt': dict(cls='Textbox', interactive=True, value=prompts.PROMPT_CHECK_DELIVERY_DATE.strip(), lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent', 'rag'], value='openai_agent', 
-                interactive=True, label="Chat engine"),
-        'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
-                value=AVAILABLE_TOOLS,
-                interactive=True, label='Tools'),
-        'speech_synthesis': dict(cls='Checkbox', value=False, 
-                interactive=True, label="Speech Synthesis"),
-    },
-    'Parameters': {
-        '__metadata': {'open': False, 'tabbed': False},
-        'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature")
-    }
-}
-
-COMPONENTS = {}
-
-COMPONENTS_EXCLUDED = {}
-EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
-
-CACHE = {"vectorstores": {}}
-
-################################################################
-# Utils
-################################################################
-
-def convert_tools_for_langchain(TOOLS):
-    from langchain_core.tools import Tool, StructuredTool
-    
-    functions = tool2schema.FindToolEnabled(TOOLS)
-    def _convert(func):
-        schema = func.to_json()
-        # TODO: arguments
-        return StructuredTool(name=schema['function']['name'], func=func.func, description=schema['function']['description'], args_schema=schema['function']['parameters'])
-    return [_convert(func) for func in functions]
-
-def _create_from_dict(PARAMS, tabbed=False):
-    params = {}
-    for name, kwargs in PARAMS.items():
-        if name.startswith('__'):
-            continue
-        cls_ = kwargs['cls']; del kwargs['cls']
-        if not tabbed:
-            params[name] = getattr(gr, cls_)(**kwargs)
-        else:
-            tab_name = kwargs['label'] if 'label' in kwargs else name
-            with gr.Tab(tab_name):
-                params[name] = getattr(gr, cls_)(**kwargs)
-    return params
-
+# Utility functions
 def _clear(session_state):
+    """Clear all session state keys except session_hash."""
     import copy
+    session_hash = session_state.get('session_hash')
     session_state.clear()
     session_state.update(copy.deepcopy(_default_session_state))
+    if session_hash:
+        session_state['session_hash'] = session_hash
     return session_state
 
-def _show_status(*args):
-    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
-    return kwargs
-
-def transcribe(audio=None):
-    try:
-        from utils.azure_speech import speech_recognition
-        return speech_recognition(audio)
-    except Exception as e:
-        return f"Microphone is not supported: {e}"
-
-def _speech_synthesis(text):
-    try:
-        from utils.azure_speech import speech_synthesis
-        speech_synthesis(text=text)
-    except Exception as e:
-        print(f"Speaker is not supported: {e}")
-
-def prebuild_vectorstores(args):
-    from utils.vectorstore import _build_vs_collection
-    autogen_yaml = args.autogen_yaml
-    CACHE['vectorstores']['default'] = _build_vs_collection('data/collections/default', 'default', 
-            autogen_yaml=autogen_yaml, verbose=True)
-
-################################################################
-# Bot fn
-################################################################
-
-from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
-
+# Bot functions
 def __helper_fn():
     import openai
     if True:
@@ -162,6 +64,8 @@ def __helper_fn():
 def _openai_agent_bot_fn(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
+    if len(messages) == 0:
+        messages.append({'role': 'system', 'content': prompts.PROMPT_CHECK_DELIVERY_DATE})
     global TOOLS_SCHEMA
     tools_schema = [obj for obj in TOOLS_SCHEMA if obj['function']['name'] in kwargs['tools']]
     messages.append({'role': 'user', 'content': message})
@@ -215,15 +119,6 @@ def _openai_agent_bot_fn(message, history, **kwargs):
                 if function_name in DIRECT_RESPONSE_TOOLS:
                     bot_message = render_message(dict(text=TOOLS.format_direct_response(function_name, result, arguments), details=details))
                 else:
-                    # function_call_result_message = {
-                    #     "role": "tool",
-                    #     "content": json.dumps({
-                    #         **arguments,
-                    #         **TOOLS.format_returns(function_name, result)
-                    #     }),
-                    #     "tool_call_id": resp.choices[0].message.tool_calls[0].id
-                    # }
-                    # messages.append(bot_msg) # function_call_triggered_message
                     function_call_result_message = {"role": 'tool', "content": str(result), "tool_call_id": resp.choices[0].message.tool_calls[0].id}
                     messages.append(json.loads(bot_msg.to_json())) # function_call_triggered_message
                     messages.append(function_call_result_message)
@@ -239,8 +134,7 @@ def _openai_agent_bot_fn(message, history, **kwargs):
     return bot_message
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
-    
-    system_prompt = kwargs.get('system_prompt', None)
+    system_prompt = prompts.PROMPT_CHECK_DELIVERY_DATE
     session_state = kwargs['session_state']
     chat_engine = 'gpt-4o'
 
@@ -259,6 +153,7 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     from utils.tools_langchain import get_tools
     tools = get_tools()
     from langchain.memory import ConversationBufferMemory
+    from langchain_core.prompts import MessagesPlaceholder
 
     agent_kwargs = {
         "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
@@ -275,128 +170,41 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
     return bot_message
 
-def _format_doc(doc, score):
-    _f = f"{doc.metadata['source']}#page={doc.metadata['page'] + 1}"
-    return dict(text=f"📁 {os.path.split(_f)[-1]}", link=_prefix_local_file(_f), score=score)
-    
-def _rag_bot_fn(message, history, **kwargs):
-    collection = kwargs.get('collection', 'default')
-    chat_engine = 'gpt-3.5-turbo'
-    vectordb = CACHE['vectorstores'][collection]
-
-    # similarity search
-    docs = vectordb.similarity_search_with_score(message, k=3)
-    scores = [1.0 - _r[1] for _r in docs] # extract scores
-    docs = [_r[0] for _r in docs]
-
-    # llm rag
-    system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
-    _kwargs = {**kwargs, 'chat_engine': chat_engine, 'system_prompt': system_prompt} # overwrite system_prompt
-    sources = [_format_doc(doc, score) for doc, score in zip(docs, scores)]
-    bot_message = llms._llm_call_stream(message, history, **_kwargs)
-    for chunk in bot_message:
-        yield render_message({'text': chunk, 'references': [dict(title="Sources", sources=sources)]})
-
 def _slash_bot_fn(message, history, **kwargs):
-    cmds = message[1:].split(' ', maxsplit=1)
-    cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
-    return message
+    """Handle bot commands starting with '/' or '.'."""
+    cmd, *args = message[1:].split(' ', maxsplit=1)
+    return message  # Command handling can be customized here
 
-def bot_fn(message, history, *args):
-    __TIC = time.time()
-    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
-
-    session_state = kwargs['session_state']
-    if len(history) == 0 or message == '/clear':
-        _clear(session_state)
-    session_state['previous_message'] = session_state['message']
-    session_state['message'] = message
-    # plain_message = _rerender_message(message)
-    # history = _rerender_history(history[session_state['context_switch_at']:])
-
-    ##########################################################
-
-    # update "auto"
+def bot_fn(message, history, **kwargs):
+    """Main bot function to handle both commands and regular messages."""
+    # Default "auto" behavior
     AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
-    if message.startswith('/') or message.startswith('.'):
+    # Clear session state if needed
+    if not history or message == '/clear':
+        _clear(kwargs['session_state'])
+
+    # Handle commands or regular conversation
+    if message.startswith(('/', '.')):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
-        bot_message = {'random': _random_bot_fn,
-            'gpt-3.5-turbo': _llm_call,
-            'gpt-4o': _llm_call_stream,
+        kwargs['tools'] = AVAILABLE_TOOLS
+        bot_fn_map = {
+            'random': _random_bot_fn,
             'openai_agent': _openai_agent_bot_fn,
             'langchain_agent': _langchain_agent_bot_fn,
-            'rag': _rag_bot_fn,
-            }.get(kwargs['chat_engine'])(message, history, **kwargs)
-    
-    ##########################################################
-    
+        }
+        bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
+
+    # Stream or yield bot message
     if isinstance(bot_message, str):
         yield bot_message
     else:
-        bot_message = yield from bot_message
+        yield from bot_message
 
-    if kwargs.get('speech_synthesis', False):
-        _speech_synthesis(_rerender_message(bot_message, format='speech'))
-    __TOC = time.time()
-    session_state['elapsed_time'] = __TOC - __TIC
-    # print(json.dumps(kwargs, indent=2))
-    print(pprint.pformat(kwargs))
-    return bot_message
-
-################################################################
-# Demo
-################################################################
-
-def get_demo():
-    global COMPONENTS, COMPONENTS_EXCLUDED
-    css="""#chatbot {
-    min-height: 600px;
-    }
-    .full-container label {
-    display: block;
-    padding-left: 8px;
-    padding-right: 8px;
-    }"""
-    with gr.Blocks(css=css) as demo:
-        # title
-        gr.HTML(f"<center><h1>{TITLE}</h1></center>")
-        # description
-        with gr.Accordion("Expand to see Introduction and Usage", open=False):
-            gr.Markdown(f"{DESCRIPTION}")
-        with gr.Row():
-            with gr.Column(scale=1):
-                # settings
-                for section_name, _settings in SETTINGS.items():
-                    metadata = _settings['__metadata']
-                    with gr.Accordion(section_name, open=metadata.get('open', False)):
-                        settings = _create_from_dict(_settings, tabbed=metadata.get('tabbed', False))
-                        COMPONENTS = {**COMPONENTS, **settings}
-                COMPONENTS_EXCLUDED = {k: v for k, v in COMPONENTS.items() if k in EXCLUDED_KEYS}
-                COMPONENTS = {k: v for k, v in COMPONENTS.items() if k not in EXCLUDED_KEYS}
-            with gr.Column(scale=9):
-                # chatbot
-                from utils.utils import change_signature
-                _sig_bot_fn = change_signature(['message', 'history'] + list(COMPONENTS.keys()))(bot_fn) # better API
-                from utils.gradio import ChatInterface
-                chatbot = ChatInterface(_sig_bot_fn, type='messages', 
-                        additional_inputs=list(COMPONENTS.values()),
-                        additional_outputs=[COMPONENTS['session_state'], COMPONENTS_EXCLUDED['status']],
-                        multimodal=False,
-                        avatar_images=('assets/user.png', 'assets/bot.png'))
-                chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
-                COMPONENTS_EXCLUDED['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS_EXCLUDED['status']], api_name=False)
-                # examples
-                with gr.Accordion("Examples", open=False) as examples_accordin:
-                    chat_examples = gr.Examples([
-                        "What's the Everett interpretation of quantum mechanics?",
-                        ], inputs=chatbot.textbox, label="AI Chat Examples",
-                    )
-    return demo
-
+# Argument parser
 def parse_args():
     """Parse input arguments."""
     import argparse
@@ -410,20 +218,23 @@ def parse_args():
         '--debug', action='store_true', 
         help='debug mode.')
     parser.add_argument(
-        '--autogen-yaml', action='store_true', 
-        help='auto generate yaml files for PDF files.')
+        '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
+        help='Environment.')
+    parser.add_argument(
+        '--mount-path', type=str, default='/demo', 
+        help='Mount path for gradio app.')
 
     args = parser.parse_args()
     return args
 
+# Main entry point
 if __name__ == '__main__':
+    import app
+    from app import main
 
+    # Set bot function and parse arguments
+    app.bot_fn = bot_fn
     args = parse_args()
 
-    prebuild_vectorstores(args)
-    gr.set_static_paths(paths=["data/collections"])
-
-    demo = get_demo()
-    from utils.gradio import reload_javascript
-    reload_javascript()
-    demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
+    # Start the main app
+    main(args)
