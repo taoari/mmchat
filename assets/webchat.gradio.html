@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.ico" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.4/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <title>Chatbot</title>
+    <style>
+        .chat-container {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 480px;
+            max-height: 600px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: #007bff;
+            padding: 10px;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .chat-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container text-center mt-5">
+        <h1>Chatbot Demo</h1>
+        <p class="alert alert-primary">Click the chat icon in the bottom right corner to begin.</p>
+    </div>
+    
+    <div class="chat-toggle">
+        <i class="bi bi-chat-dots-fill"></i>
+    </div>
+    
+    <div class="chat-container">
+        <header class="chat-header">
+            <span class="title">Chatbot</span>
+        </header>
+        <iframe src="http://localhost:7860?__theme=light" height="480px" style="border:none;"></iframe>
+    </div>
+
+    <script>
+        const chatToggle = document.querySelector('.chat-toggle');
+        const chatContainer = document.querySelector('.chat-container');
+
+        chatToggle.addEventListener('click', () => {
+            const isChatOpen = chatContainer.style.display === 'flex';
+            chatContainer.style.display = isChatOpen ? 'none' : 'flex';
+            chatToggle.innerHTML = isChatOpen ? '<i class="bi bi-chat-dots-fill"></i>' : '<i class="bi bi-arrow-down-right-square"></i>';
+        });
+    </script>
+</body>
+
+</html>

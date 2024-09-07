@@ -22,7 +22,7 @@ footer {
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    with open('webchat.gradio.html') as f:
+    with open('assets/webchat.gradio.html') as f:
         index_html = f.read().replace("http://localhost:7860", "http://localhost:7860/demo")
     return index_html
 
