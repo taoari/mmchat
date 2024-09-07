@@ -56,8 +56,9 @@ class ChatInterface(gr.Blocks):
                     upload_btn = gr.UploadButton("📁", scale=0.1, min_width=0, interactive=True)
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
                     textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True, label="Message", 
-                            elem_id='chatbot-input')
-                    submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True)
+                            elem_id='chatbot_input')
+                    submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True,
+                            elem_id='submit_btn')
                     fake_response = gr.Textbox(visible=False, label="Response")
                 else:
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
@@ -126,7 +127,8 @@ class ChatInterface(gr.Blocks):
             bot_msg = chat_msg.then(self._bot_stream_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         else:
             bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
-        bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False)
+        bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
+            fn=None, inputs=None, outputs=None, js=js_message_buttons)
 
     def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
         @wraps(self.fn)
@@ -248,7 +250,10 @@ class ChatInterfaceProd(ChatInterface):
         chatbot_state = gr.State([])
         with gr.Group():
             chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, show_label=False, container=False)
-            textbox = gr.Textbox(placeholder="Type a message...", show_label=False, container=False, interactive=True, label="Message")
+            textbox = gr.Textbox(placeholder="Type a message...", show_label=False, container=False, interactive=True, label="Message",
+                    elem_id="chatbot_input")
+            submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True, visible=False,
+                    elem_id='submit_btn')
             fake_response = gr.Textbox(visible=False, label="Response")
 
         fake_api_btn = gr.Button("Fake API", visible=False)
@@ -263,6 +268,7 @@ class ChatInterfaceProd(ChatInterface):
         self.chatbot = chatbot
         self.chatbot_state = chatbot_state
         self.textbox = textbox
+        self.submit_btn = submit_btn
 
         self.fake_response = fake_response
         self.fake_api_btn = fake_api_btn
@@ -272,9 +278,30 @@ class ChatInterfaceProd(ChatInterface):
     def _setup_event(self):
         textbox, chatbot, chatbot_state, additional_inputs = self.textbox, self.chatbot, self.chatbot_state, self.additional_inputs
         fake_response, fake_api_btn = self.fake_response, self.fake_api_btn
+        submit_btn = self.submit_btn
 
         self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
+        self._setup_submit(submit_btn.click, textbox, chatbot, additional_inputs, api_name=False)
+
+js_message_buttons = """
+function registerMessageButtons() {
+	const collection = document.querySelectorAll(".btn-chatbot");
+	for (let i = 0; i < collection.length; i++) {
+      // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
+	  collection[i].onclick=function() {
+        elem = document.getElementById("chatbot_input").getElementsByTagName('textarea')[0];
+        elem.value = collection[i].getAttribute("value"); // use value instead of innerHTML
+        elem.dispatchEvent(new Event('input', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+            }));
+        document.getElementById("submit_btn").click();
+        }; 
+	}
+}
+"""
 
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
@@ -284,30 +311,6 @@ def reload_javascript():
 <!-- for bootstrap -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
-
-<!-- for message buttons to work -->
-<script>
-function registerMessageButtons() {
-	const collection = document.querySelectorAll(".btn-chatbot");
-	for (let i = 0; i < collection.length; i++) {
-      // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
-	  collection[i].onclick=function() {
-        elem = document.getElementById("chatbot-input").getElementsByTagName('textarea')[0];
-        elem.value = collection[i].getAttribute("value"); // use value instead of innerHTML
-        elem.dispatchEvent(new Event('input', {
-            view: window,
-            bubbles: true,
-            cancelable: true
-            }))
-        };  
-	}
-}
-// need to make sure registerMessageButtons() is executed all the time as new message can come out;
-var intervalId = window.setInterval(function(){
-  registerMessageButtons();
-}, 1000);
-
-</script>
 """
     def template_response(*args, **kwargs):
         res = GradioTemplateResponseOriginal(*args, **kwargs)
@@ -332,11 +335,12 @@ def test_chat_interface():
     demo.queue().launch(server_name='0.0.0.0')
 
 def test_chat_interface_prod():
-    from utils.llms import _llm_call, _llm_call_stream
+    from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 
     def bot_fn(message, history, *args):
-        bot_message = _llm_call_stream(message, history)
-        yield from bot_message
+        # bot_message = _llm_call_stream(message, history)
+        # yield from bot_message
+        return _random_bot_fn(message, history)
 
     css="""
 #chatbot {
