@@ -166,7 +166,8 @@ def bot_fn(message, history, **kwargs):
     return bot_message
 
 def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
-    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
+    kwargs = _collect_kwargs(SETTINGS, EXCLUDED_KEYS)
+    kwargs = {k: v for k, v in zip(kwargs.keys(), args)}
     if request:
         kwargs['session_state']['session_hash'] = request.session_hash
     bot_message = yield from bot_fn(message, history, **kwargs)
@@ -209,12 +210,13 @@ def get_demo():
 
             with gr.Column(scale=9):
                 from utils.utils import change_signature
-                sig_bot_fn = change_signature(['message', 'history', 'request'] + list(COMPONENTS.keys()))(bot_fn_wrapper)
+                additional_keys = list(_collect_kwargs(SETTINGS, EXCLUDED_KEYS).keys())
+                sig_bot_fn = change_signature(['message', 'history', 'request'] + additional_keys)(bot_fn_wrapper)
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(
                     sig_bot_fn, 
                     type='messages', 
-                    additional_inputs=list(COMPONENTS.values()),
+                    additional_inputs=[COMPONENTS[key] for key in additional_keys],
                     additional_outputs=[COMPONENTS['session_state'], COMPONENTS['status']],
                     multimodal=False,
                     avatar_images=('assets/user.png', 'assets/bot.png')
