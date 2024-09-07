@@ -55,7 +55,8 @@ class ChatInterface(gr.Blocks):
                 if not multimodal:
                     upload_btn = gr.UploadButton("📁", scale=0.1, min_width=0, interactive=True)
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
-                    textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True, label="Message")
+                    textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True, label="Message", 
+                            elem_id='chatbot-input')
                     submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True)
                     fake_response = gr.Textbox(visible=False, label="Response")
                 else:
@@ -223,6 +224,57 @@ class ChatInterface(gr.Blocks):
         msg_dict['text'] = message
         return message + '\n' + re.sub(r'^\s+', '', render_message(msg_dict)).replace('\n', '')
 
+class ChatInterfaceProd(ChatInterface):
+    def __init__(self, 
+                fn,
+                *,
+                additional_inputs=[],
+                additional_outputs=[],
+                type='tuples',
+                multimodal=False,
+                avatar_images=(None, None),
+                analytics_enabled=None,
+                css=None,
+                title=None,
+                theme=None,):
+        gr.Blocks().__init__(
+            analytics_enabled=analytics_enabled,
+            mode="chat_interface",
+            css=css,
+            title=title or "Gradio",
+            theme=theme,
+        )
+
+        chatbot_state = gr.State([])
+        with gr.Group():
+            chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, show_label=False, container=False)
+            textbox = gr.Textbox(placeholder="Type a message...", show_label=False, container=False, interactive=True, label="Message")
+            fake_response = gr.Textbox(visible=False, label="Response")
+
+        fake_api_btn = gr.Button("Fake API", visible=False)
+        stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
+
+        self.type = type
+        self.fn = fn
+        self.additional_inputs = additional_inputs
+        self.additional_outputs = additional_outputs
+        self.is_generator = inspect.isgeneratorfunction(self.fn) 
+        
+        self.chatbot = chatbot
+        self.chatbot_state = chatbot_state
+        self.textbox = textbox
+
+        self.fake_response = fake_response
+        self.fake_api_btn = fake_api_btn
+
+        self._setup_event()
+
+    def _setup_event(self):
+        textbox, chatbot, chatbot_state, additional_inputs = self.textbox, self.chatbot, self.chatbot_state, self.additional_inputs
+        fake_response, fake_api_btn = self.fake_response, self.fake_api_btn
+
+        self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
+        self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
 
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
@@ -240,7 +292,7 @@ function registerMessageButtons() {
 	for (let i = 0; i < collection.length; i++) {
       // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
 	  collection[i].onclick=function() {
-        elem = document.getElementById("inputTextBox").getElementsByTagName('textarea')[0];
+        elem = document.getElementById("chatbot-input").getElementsByTagName('textarea')[0];
         elem.value = collection[i].getAttribute("value"); // use value instead of innerHTML
         elem.dispatchEvent(new Event('input', {
             view: window,
@@ -259,9 +311,6 @@ var intervalId = window.setInterval(function(){
 """
     def template_response(*args, **kwargs):
         res = GradioTemplateResponseOriginal(*args, **kwargs)
-        # soup = BeautifulSoup(res.body, 'html.parser')
-        # # NOTE: gradio UI is rendered by JavaScript, so can not find btn-chatbot
-        # res.body = str(soup).replace('</html>', f'{js}</html>').encode('utf8')
         res.body = res.body.replace(b'</html>', f'{js}</html>'.encode("utf8"))
         res.init_headers()
         return res
@@ -270,16 +319,48 @@ var intervalId = window.setInterval(function(){
 
 GradioTemplateResponseOriginal = gr.routes.templates.TemplateResponse
 
-if __name__ == '__main__':
-
-    # python -m utils.gradio
+def test_chat_interface():
     from utils.llms import _llm_call, _llm_call_stream
 
     def bot_fn(message, history, *args):
         bot_message = _llm_call_stream(message, history)
         yield from bot_message
-    
+
     with gr.Blocks() as demo:
         chatbot = ChatInterface(bot_fn, type='messages')
     reload_javascript()
     demo.queue().launch(server_name='0.0.0.0')
+
+def test_chat_interface_prod():
+    from utils.llms import _llm_call, _llm_call_stream
+
+    def bot_fn(message, history, *args):
+        bot_message = _llm_call_stream(message, history)
+        yield from bot_message
+
+    css="""
+#chatbot {
+    min-height: 600px;
+}
+footer {
+    display: none !important;
+}
+.message-row {
+    margin: 8px 5px 2px 5px;
+}
+.full-container label {
+    display: block;
+    padding: 0 8px;
+}
+    """
+    with gr.Blocks(css=css, theme=gr.themes.Base()) as demo:
+        chatbot = ChatInterfaceProd(bot_fn, type='messages')
+    reload_javascript()
+    demo.queue().launch(server_name='0.0.0.0')
+
+if __name__ == '__main__':
+
+    # python -m utils.gradio
+    # test_chat_interface()
+    test_chat_interface_prod()
+

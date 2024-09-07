@@ -1,3 +1,5 @@
+# conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+
 gradio<=4.40
 python-dotenv
 bs4
