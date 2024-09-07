@@ -15,8 +15,6 @@ def parse_endpoints_from_environ():
             else:
                 LLM_ENDPOINTS[name.lower()] = dict(url=value, model=name)
 
-parse_endpoints_from_environ()
-
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'

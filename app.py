@@ -5,91 +5,92 @@ import logging
 import jinja2
 import pprint
 import gradio as gr
-
+from dotenv import load_dotenv
 from utils.message import parse_message, render_message, _rerender_message, _rerender_history
 from utils.gradio import reload_javascript
+from utils import llms
 
 ################################################################
-# Load .env and logging
+# Load environment variables and configure logging
 ################################################################
-
-from dotenv import load_dotenv
-
-load_dotenv()  # take environment variables from .env.
+load_dotenv()  # Load environment variables from .env file
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+logging.basicConfig(
+    level=logging.WARN,
+    format='%(asctime)-15s] %(message)s',
+    datefmt="%m/%d/%Y %I:%M:%S %p %Z"
+)
 
+# Overriding print function to use logging
 def print(*args, **kwargs):
-    sep = kwargs['sep'] if 'sep' in kwargs else ' '
-    logger.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
+    sep = kwargs.get('sep', ' ')
+    logger.warning(sep.join(str(arg) for arg in args))
 
-from utils import llms
 llms.print = print
+llms.parse_endpoints_from_environ()
 
 ################################################################
 # Globals
 ################################################################
+_default_session_state = {
+    'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
+    'message': None,
+    'previous_message': None,
+}
 
-_default_session_state = dict(
-        context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
-        message=None,
-        previous_message=None,
-    )
-
-TITLE = """ Gradio Multimodal Chatbot Template """
-
-DESCRIPTION = """Welcome
-"""
+TITLE = "Gradio Multimodal Chatbot Template"
+DESCRIPTION = "Welcome"
 
 SETTINGS = {
     'Info': {
         '__metadata': {'open': False, 'tabbed': False},
-        'session_state': dict(cls='State', value=_default_session_state),
-        'status': dict(cls='JSON', label='Status'),
-        'show_status_btn': dict(cls='Button', value='Show')
+        'session_state': {'cls': 'State', 'value': _default_session_state},
+        'status': {'cls': 'JSON', 'label': 'Status'},
+        'show_status_btn': {'cls': 'Button', 'value': 'Show'}
     },
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
-        'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), value='auto', 
-                interactive=True, label="Chat engine"),
-        'speech_synthesis': dict(cls='Checkbox', value=False, 
-                interactive=True, label="Speech Synthesis"),
+        'system_prompt': {'cls': 'Textbox', 'interactive': True, 'lines': 5, 'label': "System Prompt"},
+        'chat_engine': {
+            'cls': 'Dropdown', 
+            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
+            'value': 'auto', 
+            'interactive': True, 
+            'label': "Chat Engine"
+        },
+        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'interactive': True, 'label': "Speech Synthesis"}
     },
     'Parameters': {
         '__metadata': {'open': False, 'tabbed': False},
-        'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature")
+        'temperature': {'cls': 'Slider', 'minimum': 0, 'maximum': 1, 'value': 0.7, 'step': 0.1, 'interactive': True, 'label': "Temperature"}
     }
 }
 
 COMPONENTS = {}
-
-COMPONENTS_EXCLUDED = {}
-EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
+EXCLUDED_KEYS = ['status', 'show_status_btn']
 
 ################################################################
-# Utils
+# Utility Functions
 ################################################################
-
 def _create_from_dict(PARAMS, tabbed=False):
     params = {}
     for name, kwargs in PARAMS.items():
         if name.startswith('__'):
             continue
-        cls_ = kwargs['cls']; del kwargs['cls']
-        if not tabbed:
-            params[name] = getattr(gr, cls_)(**kwargs)
-        else:
-            tab_name = kwargs['label'] if 'label' in kwargs else name
+        cls_ = kwargs.pop('cls')
+        if tabbed:
+            tab_name = kwargs.get('label', name)
             with gr.Tab(tab_name):
                 params[name] = getattr(gr, cls_)(**kwargs)
+        else:
+            params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
 def _clear(session_state):
-    """Clear all session state keys except session_hash"""
+    """Clear all session state keys except session_hash."""
     import copy
-    session_hash = session_state.get('session_hash', None)
+    session_hash = session_state.get('session_hash')
     session_state.clear()
     session_state.update(copy.deepcopy(_default_session_state))
     if session_hash:
@@ -116,36 +117,30 @@ def _speech_synthesis(text):
 
 def _collect_kwargs(SETTINGS, EXCLUDED_KEYS):
     kwargs = {}
-    for k, v in SETTINGS.items():
-        for _k, _v in v.items():
-            if _k not in EXCLUDED_KEYS and not _k.startswith('__'):
-                kwargs[_k] = _v.get('value', None)
+    for section, items in SETTINGS.items():
+        for k, v in items.items():
+            if k not in EXCLUDED_KEYS and not k.startswith('__'):
+                kwargs[k] = v.get('value', None)
     return kwargs
 
 ################################################################
-# Bot fn
+# Bot Functions
 ################################################################
-
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 
 def _slash_bot_fn(message, history, **kwargs):
-    cmds = message[1:].split(' ', maxsplit=1)
-    cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
+    cmd, *rest = message[1:].split(' ', maxsplit=1)
     return message
 
 def bot_fn(message, history, **kwargs):
-    __TIC = time.time()
     session_state = kwargs['session_state']
-    if len(history) == 0 or message == '/clear':
+    if not history or message == '/clear':
         _clear(session_state)
+
     session_state['previous_message'] = session_state['message']
     session_state['message'] = message
-    # plain_message = _rerender_message(message)
-    # history = _rerender_history(history[session_state['context_switch_at']:])
 
-    ##########################################################
-
-    # update "auto"
+    # Default "auto" behavior
     AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
@@ -153,22 +148,20 @@ def bot_fn(message, history, **kwargs):
     if message.startswith('/') or message.startswith('.'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
-        bot_message = {'random': _random_bot_fn,
-            'gpt-3.5-turbo': _llm_call,
-            'gpt-4o': _llm_call_stream,
-            }.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
-    
-    ##########################################################
-    
+        bot_fn_map = {
+            'random': _random_bot_fn,
+        }
+        bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
+
     if isinstance(bot_message, str):
         yield bot_message
     else:
-        bot_message = yield from bot_message
+        yield from bot_message
 
     if kwargs.get('speech_synthesis', False):
         _speech_synthesis(_rerender_message(bot_message, format='speech'))
-    __TOC = time.time()
-    session_state['elapsed_time'] = __TOC - __TIC
+
+    session_state['elapsed_time'] = time.time() - kwargs.get('__TIC', time.time())
     print(pprint.pformat(kwargs))
     return bot_message
 
@@ -180,7 +173,6 @@ def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
     return bot_message
 
 def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_state):
-    # NOTE: in production mode, parameters are fixed except for session_state
     kwargs = _collect_kwargs(SETTINGS, EXCLUDED_KEYS)
     kwargs['session_state'] = session_state
     if request:
@@ -189,78 +181,82 @@ def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_st
     return bot_message
 
 ################################################################
-# Demo
+# Gradio Demo Setup
 ################################################################
-
 def get_demo():
-    global COMPONENTS, COMPONENTS_EXCLUDED
-    css="""#chatbot {
-    min-height: 600px;
+    global COMPONENTS
+    css = """
+    #chatbot {
+        min-height: 600px;
     }
     .full-container label {
-    display: block;
-    padding-left: 8px;
-    padding-right: 8px;
-    }"""
+        display: block;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    """
     with gr.Blocks(css=css) as demo:
-        # title
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
-        # description
-        with gr.Accordion("Expand to see Introduction and Usage", open=False):
-            gr.Markdown(f"{DESCRIPTION}")
+        with gr.Accordion("Expand for Introduction and Usage", open=False):
+            gr.Markdown(DESCRIPTION)
+
         with gr.Row():
             with gr.Column(scale=1):
-                # settings
-                for section_name, _settings in SETTINGS.items():
-                    metadata = _settings['__metadata']
+                for section_name, settings in SETTINGS.items():
+                    metadata = settings['__metadata']
                     with gr.Accordion(section_name, open=metadata.get('open', False)):
-                        settings = _create_from_dict(_settings, tabbed=metadata.get('tabbed', False))
-                        COMPONENTS = {**COMPONENTS, **settings}
-                COMPONENTS_EXCLUDED = {k: v for k, v in COMPONENTS.items() if k in EXCLUDED_KEYS}
-                COMPONENTS = {k: v for k, v in COMPONENTS.items() if k not in EXCLUDED_KEYS}
-            with gr.Column(scale=9):
-                # chatbot
-                from utils.utils import change_signature
-                _sig_bot_fn = change_signature(['message', 'history', 'request'] + list(COMPONENTS.keys()))(bot_fn_wrapper) # better API
-                from utils.gradio import ChatInterface
-                chatbot = ChatInterface(_sig_bot_fn, type='messages', 
-                        additional_inputs=list(COMPONENTS.values()),
-                        additional_outputs=[COMPONENTS['session_state'], COMPONENTS_EXCLUDED['status']],
-                        multimodal=False,
-                        avatar_images=('assets/user.png', 'assets/bot.png'))
-                chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
-                COMPONENTS_EXCLUDED['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS_EXCLUDED['status']], api_name=False)
-                # examples
-                with gr.Accordion("Examples", open=False) as examples_accordin:
-                    chat_examples = gr.Examples([
-                        "What's the Everett interpretation of quantum mechanics?",
-                        ], inputs=chatbot.textbox, label="AI Chat Examples",
-                    )
-    return demo
+                        COMPONENTS.update(_create_from_dict(settings, tabbed=metadata.get('tabbed', False)))
 
-css="""
-#chatbot {
-    min-height: 600px;
-}
-footer {
-    display: none !important;
-}
-.message-row {
-    margin: 8px 5px 2px 5px;
-}
-.full-container label {
-    display: block;
-    padding: 0 8px;
-}
-    """
+            with gr.Column(scale=9):
+                from utils.utils import change_signature
+                sig_bot_fn = change_signature(['message', 'history', 'request'] + list(COMPONENTS.keys()))(bot_fn_wrapper)
+                from utils.gradio import ChatInterface
+                chatbot = ChatInterface(
+                    sig_bot_fn, 
+                    type='messages', 
+                    additional_inputs=list(COMPONENTS.values()),
+                    additional_outputs=[COMPONENTS['session_state'], COMPONENTS['status']],
+                    multimodal=False,
+                    avatar_images=('assets/user.png', 'assets/bot.png')
+                )
+                chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False)
+                COMPONENTS['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS['status']], queue=False)
+
+                with gr.Accordion("Examples", open=False):
+                    gr.Examples(
+                        ["What's the Everett interpretation of quantum mechanics?"],
+                        inputs=chatbot.textbox
+                    )
+
+    reload_javascript()
+    return demo
 
 def get_demo_prod():
     from utils.gradio import ChatInterfaceProd
+    css = """
+    #chatbot {
+        min-height: 600px;
+    }
+    footer {
+        display: none !important;
+    }
+    .message-row {
+        margin: 8px 5px 2px 5px;
+    }
+    .full-container label {
+        display: block;
+        padding: 0 8px;
+    }
+    """
     with gr.Blocks(css=css, theme=gr.themes.Base()) as demo:
         session_state = gr.State(_default_session_state)
-        chatbot = ChatInterfaceProd(bot_fn_wrapper_prod, type='messages',
-                additional_inputs=[session_state],
-                avatar_images=('assets/user.png', 'assets/bot.png'))
+        chatbot = ChatInterfaceProd(
+            bot_fn_wrapper_prod, 
+            type='messages', 
+            additional_inputs=[session_state],
+            avatar_images=('assets/user.png', 'assets/bot.png'),
+        )
+    reload_javascript()
     return demo
 
 def parse_args():
@@ -283,21 +279,17 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
-
     args = parse_args()
 
     if args.env in ['dev', 'prod']:
-        if args.env == 'prod':
-            demo = get_demo_prod()
-        else:
-            demo = get_demo()
-        reload_javascript()
+        demo = get_demo_prod() if args.env == 'prod' else get_demo()
         demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
 
     elif args.env == 'prod_fastapi':
         from fastapi import FastAPI
         from fastapi.responses import HTMLResponse
         import gradio as gr
+        import uvicorn
 
         app = FastAPI()
 
@@ -306,12 +298,10 @@ if __name__ == '__main__':
             with open('assets/webchat.gradio.html') as f:
                 index_html = f.read().replace("http://localhost:7860", f"http://localhost:{args.port}/demo")
             return index_html
-        
+
         demo = get_demo_prod()
-        reload_javascript()
         app = gr.mount_gradio_app(app, demo, path='/demo')
 
-        import uvicorn
         uvicorn.run(app, port=args.port)
 
     else:
