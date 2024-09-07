@@ -3,12 +3,12 @@ from bs4 import BeautifulSoup
 import os
 import re
 
-def _trim_local_file(url):
-    return url.removeprefix('/file=')
+def _trim_local_file(url, path=None):
+    return url.removeprefix('/file=') if path is None else url.removeprefix(f'{path}/file=')
 
-def _prefix_local_file(url):
+def _prefix_local_file(url, path=None):
     if '://' not in url:  # Local file
-        return '/file=' + url
+        return f'/file={url}' if path is None else f'{path}/file={url}'
     else:
         return url
 
