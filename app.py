@@ -261,28 +261,7 @@ def get_demo_prod():
     reload_javascript()
     return demo
 
-def parse_args():
-    """Parse input arguments."""
-    import argparse
-    parser = argparse.ArgumentParser(
-        description='Multimodal Chatbot',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '-p', '--port', default=7860, type=int,
-        help='port number.')
-    parser.add_argument(
-        '--debug', action='store_true', 
-        help='debug mode.')
-    parser.add_argument(
-        '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
-        help='Environment.')
-
-    args = parser.parse_args()
-    return args
-
-if __name__ == '__main__':
-    args = parse_args()
-
+def main(args):
     if args.env in ['dev', 'prod']:
         demo = get_demo_prod() if args.env == 'prod' else get_demo()
         demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
@@ -308,3 +287,27 @@ if __name__ == '__main__':
 
     else:
         raise ValueError(f"Invalid environment: {args.env}")
+
+def parse_args():
+    """Parse input arguments."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Multimodal Chatbot',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '-p', '--port', default=7860, type=int,
+        help='port number.')
+    parser.add_argument(
+        '--debug', action='store_true', 
+        help='debug mode.')
+    parser.add_argument(
+        '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
+        help='Environment.')
+
+    args = parser.parse_args()
+    return args
+
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)
+
