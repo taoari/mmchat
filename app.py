@@ -109,6 +109,14 @@ def _speech_synthesis(text):
     except Exception as e:
         print(f"Speaker is not supported: {e}")
 
+def _collect_kwargs(SETTINGS, EXCLUDED_KEYS):
+    kwargs = {}
+    for k, v in SETTINGS.items():
+        for _k, _v in v.items():
+            if _k not in EXCLUDED_KEYS and not _k.startswith('__'):
+                kwargs[_k] = _v.get('value', None)
+    return kwargs
+
 ################################################################
 # Bot fn
 ################################################################
@@ -120,10 +128,8 @@ def _slash_bot_fn(message, history, **kwargs):
     cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
     return message
 
-def bot_fn(message, history, *args):
+def bot_fn(message, history, **kwargs):
     __TIC = time.time()
-    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
-
     session_state = kwargs['session_state']
     if len(history) == 0 or message == '/clear':
         _clear(session_state)
@@ -161,6 +167,18 @@ def bot_fn(message, history, *args):
     print(pprint.pformat(kwargs))
     return bot_message
 
+def bot_fn_wrapper(message, history, *args):
+    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
+    bot_message = yield from bot_fn(message, history, **kwargs)
+    return bot_message
+
+def bot_fn_wrapper_prod(message, history, session_state):
+    # NOTE: in production mode, parameters are fixed except for session_state
+    kwargs = _collect_kwargs(SETTINGS, EXCLUDED_KEYS)
+    kwargs['session_state'] = session_state
+    bot_message = yield from bot_fn(message, history, **kwargs)
+    return bot_message
+
 ################################################################
 # Demo
 ################################################################
@@ -194,7 +212,7 @@ def get_demo():
             with gr.Column(scale=9):
                 # chatbot
                 from utils.utils import change_signature
-                _sig_bot_fn = change_signature(['message', 'history'] + list(COMPONENTS.keys()))(bot_fn) # better API
+                _sig_bot_fn = change_signature(['message', 'history'] + list(COMPONENTS.keys()))(bot_fn_wrapper) # better API
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(_sig_bot_fn, type='messages', 
                         additional_inputs=list(COMPONENTS.values()),
@@ -211,6 +229,31 @@ def get_demo():
                     )
     return demo
 
+css="""
+#chatbot {
+    min-height: 600px;
+}
+footer {
+    display: none !important;
+}
+.message-row {
+    margin: 8px 5px 2px 5px;
+}
+.full-container label {
+    display: block;
+    padding: 0 8px;
+}
+    """
+
+def get_demo_prod():
+    from utils.gradio import ChatInterfaceProd
+    with gr.Blocks(css=css, theme=gr.themes.Base()) as demo:
+        session_state = gr.State(_default_session_state)
+        chatbot = ChatInterfaceProd(bot_fn_wrapper_prod, type='messages',
+                additional_inputs=[session_state],
+                avatar_images=('assets/user.png', 'assets/bot.png'))
+    return demo
+
 def parse_args():
     """Parse input arguments."""
     import argparse
@@ -223,6 +266,9 @@ def parse_args():
     parser.add_argument(
         '--debug', action='store_true', 
         help='debug mode.')
+    parser.add_argument(
+        '--prod', action='store_true', 
+        help='production mode.')
 
     args = parser.parse_args()
     return args
@@ -231,7 +277,10 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    demo = get_demo()
+    if args.prod:
+        demo = get_demo_prod()
+    else:
+        demo = get_demo()
     from utils.gradio import reload_javascript
     reload_javascript()
     demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
