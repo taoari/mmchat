@@ -172,11 +172,17 @@ def bot_fn_wrapper(message, history, *args):
     bot_message = yield from bot_fn(message, history, **kwargs)
     return bot_message
 
-def bot_fn_wrapper_prod(message, history, session_state):
+def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_state):
     # NOTE: in production mode, parameters are fixed except for session_state
     kwargs = _collect_kwargs(SETTINGS, EXCLUDED_KEYS)
     kwargs['session_state'] = session_state
     bot_message = yield from bot_fn(message, history, **kwargs)
+    
+    if request:
+        print("Request headers dictionary:", request.headers)
+        print("IP address:", request.client.host)
+        print("Query parameters:", dict(request.query_params))
+        print("Session hash:", request.session_hash)
     return bot_message
 
 ################################################################
