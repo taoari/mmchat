@@ -130,7 +130,7 @@ class ChatInterface(gr.Blocks):
         else:
             bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
-            fn=None, inputs=None, outputs=None, js=js_message_buttons)
+            fn=None, inputs=None, outputs=None, js=js_chatbot_message)
 
     def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
         @wraps(self.fn)
@@ -288,7 +288,7 @@ class ChatInterfaceProd(ChatInterface):
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
         self._setup_submit(submit_btn.click, textbox, chatbot, additional_inputs, api_name=False)
 
-js_message_buttons = """
+js_chatbot_message = """
 function registerMessageButtons() {
 	const collection = document.querySelectorAll(".btn-chatbot");
 	for (let i = 0; i < collection.length; i++) {
@@ -304,6 +304,11 @@ function registerMessageButtons() {
         document.getElementById("submit_btn").click();
         }; 
 	}
+
+    const links = document.querySelectorAll('.gradio-file');
+    links.forEach(link => {
+        link.setAttribute('target', '_blank');
+    });
 }
 """
 
