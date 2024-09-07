@@ -97,10 +97,6 @@ def _clear(session_state):
         session_state['session_hash'] = session_hash
     return session_state
 
-def _show_status(*args):
-    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
-    return kwargs
-
 def transcribe(audio=None):
     try:
         from utils.azure_speech import speech_recognition
@@ -121,6 +117,11 @@ def _collect_kwargs(SETTINGS, EXCLUDED_KEYS):
         for k, v in items.items():
             if k not in EXCLUDED_KEYS and not k.startswith('__'):
                 kwargs[k] = v.get('value', None)
+    return kwargs
+
+def _show_status(*args):
+    additional_keys = list(_collect_kwargs(SETTINGS, EXCLUDED_KEYS).keys())
+    kwargs = {k: v for k, v in zip(additional_keys, args)}
     return kwargs
 
 ################################################################
@@ -208,21 +209,22 @@ def get_demo():
                     with gr.Accordion(section_name, open=metadata.get('open', False)):
                         COMPONENTS.update(_create_from_dict(settings, tabbed=metadata.get('tabbed', False)))
 
+            additional_keys = list(_collect_kwargs(SETTINGS, EXCLUDED_KEYS).keys())
+            additional_inputs=[COMPONENTS[key] for key in additional_keys]
             with gr.Column(scale=9):
                 from utils.utils import change_signature
-                additional_keys = list(_collect_kwargs(SETTINGS, EXCLUDED_KEYS).keys())
                 sig_bot_fn = change_signature(['message', 'history', 'request'] + additional_keys)(bot_fn_wrapper)
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(
                     sig_bot_fn, 
                     type='messages', 
-                    additional_inputs=[COMPONENTS[key] for key in additional_keys],
-                    additional_outputs=[COMPONENTS['session_state'], COMPONENTS['status']],
+                    additional_inputs=additional_inputs,
                     multimodal=False,
                     avatar_images=('assets/user.png', 'assets/bot.png')
                 )
                 chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False)
-                COMPONENTS['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS['status']], queue=False)
+                if 'status' in COMPONENTS and 'show_status_btn' in COMPONENTS:
+                    COMPONENTS['show_status_btn'].click(_show_status, additional_inputs, COMPONENTS['status'], queue=False)
 
                 with gr.Accordion("Examples", open=False):
                     gr.Examples(
