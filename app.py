@@ -284,11 +284,11 @@ def main(args):
         @app.get("/", response_class=HTMLResponse)
         def index():
             with open('assets/webchat.gradio.html') as f:
-                index_html = f.read().replace("http://localhost:7860", f"http://localhost:{args.port}/demo")
+                index_html = f.read().replace("http://localhost:7860", f"http://localhost:{args.port}{args.mount_path}")
             return index_html
 
         demo = get_demo_prod()
-        app = gr.mount_gradio_app(app, demo, path='/demo')
+        app = gr.mount_gradio_app(app, demo, path=args.mount_path)
 
         uvicorn.run(app, port=args.port)
 
@@ -310,6 +310,9 @@ def parse_args():
     parser.add_argument(
         '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
         help='Environment.')
+    parser.add_argument(
+        '--mount-path', type=str, default='/demo', 
+        help='Mount path for gradio app.')
 
     args = parser.parse_args()
     return args

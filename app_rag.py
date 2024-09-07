@@ -17,11 +17,9 @@ load_dotenv()
 
 # Default session state
 _default_session_state = {
-    'context_switch_at': 0,  # Ignore history before this point (e.g., after an image or file upload)
-    'message': None,
-    'previous_message': None,
+    'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
+    'messages': [],
 }
-
 CACHE = {"vectorstores": {}}
 
 # Utility functions
@@ -48,7 +46,7 @@ def prebuild_vectorstores(args):
 def format_document(doc, score):
     """Format document for display."""
     file_ref = f"{doc.metadata['source']}#page={doc.metadata['page'] + 1}"
-    path = '/demo' if args.env == 'prod_fastapi' else None
+    path = args.mount_path if args.env == 'prod_fastapi' else None
     return {
         'text': f"📁 {os.path.basename(file_ref)}", 
         'link': _prefix_local_file(file_ref, path), 
@@ -121,6 +119,9 @@ def parse_args():
     parser.add_argument(
         '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
         help='Environment.')
+    parser.add_argument(
+        '--mount-path', type=str, default='/demo', 
+        help='Mount path for gradio app.')
     parser.add_argument('--autogen-yaml', action='store_true', 
         help='Auto-generate YAML files for PDF documents.')
 
