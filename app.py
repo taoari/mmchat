@@ -275,8 +275,8 @@ def parse_args():
         '--debug', action='store_true', 
         help='debug mode.')
     parser.add_argument(
-        '--prod', action='store_true', 
-        help='production mode.')
+        '--env', type=str, default='dev', choices=['dev', 'prod', 'prod_fastapi'], 
+        help='Environment.')
 
     args = parser.parse_args()
     return args
@@ -285,7 +285,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.prod:
+    if args.env == 'prod':
         demo = get_demo_prod()
     else:
         demo = get_demo()
