@@ -171,8 +171,10 @@ def bot_fn(message, history, **kwargs):
     print(pprint.pformat(kwargs))
     return bot_message
 
-def bot_fn_wrapper(message, history, *args):
+def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
     kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
+    if request:
+        kwargs['session_state']['session_hash'] = request.session_hash
     bot_message = yield from bot_fn(message, history, **kwargs)
     return bot_message
 
@@ -218,7 +220,7 @@ def get_demo():
             with gr.Column(scale=9):
                 # chatbot
                 from utils.utils import change_signature
-                _sig_bot_fn = change_signature(['message', 'history'] + list(COMPONENTS.keys()))(bot_fn_wrapper) # better API
+                _sig_bot_fn = change_signature(['message', 'history', 'request'] + list(COMPONENTS.keys()))(bot_fn_wrapper) # better API
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(_sig_bot_fn, type='messages', 
                         additional_inputs=list(COMPONENTS.values()),
