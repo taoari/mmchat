@@ -35,8 +35,7 @@ llms.parse_endpoints_from_environ()
 ################################################################
 _default_session_state = {
     'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
-    'message': None,
-    'previous_message': None,
+    'messages': [],
 }
 
 TITLE = "Gradio Multimodal Chatbot Template"
@@ -134,17 +133,13 @@ def _slash_bot_fn(message, history, **kwargs):
     return message
 
 def bot_fn(message, history, **kwargs):
-    session_state = kwargs['session_state']
-    if not history or message == '/clear':
-        _clear(session_state)
-
-    session_state['previous_message'] = session_state['message']
-    session_state['message'] = message
-
     # Default "auto" behavior
     AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
+
+    if not history or message == '/clear':
+        _clear(kwargs['session_state'])
 
     if message.startswith('/') or message.startswith('.'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
@@ -158,12 +153,6 @@ def bot_fn(message, history, **kwargs):
         yield bot_message
     else:
         yield from bot_message
-
-    if kwargs.get('speech_synthesis', False):
-        _speech_synthesis(_rerender_message(bot_message, format='speech'))
-
-    session_state['elapsed_time'] = time.time() - kwargs.get('__TIC', time.time())
-    print(pprint.pformat(kwargs))
     return bot_message
 
 def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
@@ -171,7 +160,15 @@ def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
     kwargs = {k: v for k, v in zip(kwargs.keys(), args)}
     if request:
         kwargs['session_state']['session_hash'] = request.session_hash
+
+    __TIC = time.time()
     bot_message = yield from bot_fn(message, history, **kwargs)
+
+    if kwargs.get('speech_synthesis', False):
+        _speech_synthesis(_rerender_message(bot_message, format='speech'))
+
+    kwargs['session_state']['elapsed_time'] = time.time() - __TIC
+    print(pprint.pformat(kwargs))
     return bot_message
 
 def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_state):
@@ -179,7 +176,15 @@ def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_st
     kwargs['session_state'] = session_state
     if request:
         kwargs['session_state']['session_hash'] = request.session_hash
+
+    __TIC = time.time()
     bot_message = yield from bot_fn(message, history, **kwargs)
+
+    if kwargs.get('speech_synthesis', False):
+        _speech_synthesis(_rerender_message(bot_message, format='speech'))
+
+    kwargs['session_state']['elapsed_time'] = time.time() - __TIC
+    print(pprint.pformat(kwargs))
     return bot_message
 
 ################################################################
