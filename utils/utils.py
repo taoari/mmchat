@@ -13,13 +13,19 @@ def recursive_apply_to_dict_values(d, func):
         return [recursive_apply_to_dict_values(item, func) for item in d]
     else:
         return func(d)
-    
-def recursive_to_dict(v):
-    def _convert(item):
-        if hasattr(item, '__dict__'):
-            return item.__dict__
-        return item
-    return recursive_apply_to_dict_values(v, _convert)
+
+def recursive_to_dict(obj, max_level=float('inf'), current_level=0):
+    if current_level >= max_level:
+        return str(obj)  # Limit reached, return a string representation or any other fallback
+
+    if hasattr(obj, "__dict__"):
+        return {key: recursive_to_dict(value, max_level, current_level + 1) for key, value in obj.__dict__.items()}
+    elif isinstance(obj, list):
+        return [recursive_to_dict(item, max_level, current_level + 1) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: recursive_to_dict(value, max_level, current_level + 1) for key, value in obj.items()}
+    else:
+        return obj
 
 def change_signature(arg_list, kwarg_dict={}):
     def decorator(fn):

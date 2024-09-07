@@ -30,10 +30,15 @@ def get_demo():
     from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
     from utils.gradio import ChatInterfaceProd, reload_javascript
 
-    def bot_fn(message, history):
+    def bot_fn(message, history, request: gr.routes.Request):
         # bot_message = _llm_call_stream(message, history)
         # yield from bot_message
         bot_message = _random_bot_fn(message, history)
+        if request:
+            print("Request headers dictionary:", request.headers)
+            print("IP address:", request.client.host)
+            print("Query parameters:", dict(request.query_params))
+            print("Session hash:", request.session_hash)
         return bot_message
 
     with gr.Blocks(css=css, theme=gr.themes.Base()) as demo:

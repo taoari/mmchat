@@ -3,6 +3,8 @@ from functools import wraps
 import re
 import json
 import gradio as gr
+from gradio.routes import Request
+from gradio.helpers import special_args
 
 def _convert_history(history, type='tuples'):
     assert type in ['tuples', 'messages']
@@ -153,15 +155,17 @@ class ChatInterface(gr.Blocks):
             history.append({'role': 'user', 'content': message["text"]})
         return gr.update(value=None, interactive=False), history
     
-    def _bot_fn(self, history, *args):
+    def _bot_fn(self, history, request: Request, *args):
         message = history[-1]['content']
-        response = self.fn(message, history[:-1], *args)
+        inputs, _, _ = special_args(self.fn, inputs=[message, history[:-1], *args], request=request)
+        response = self.fn(*inputs)
         history.append({'role': 'assistant', 'content': response})
         return history
     
-    def _bot_stream_fn(self, history, *args):
+    def _bot_stream_fn(self, history, request: Request, *args):
         message = history[-1]['content']
-        response = self.fn(message, history[:-1], *args)
+        inputs, _, _ = special_args(self.fn, inputs=[message, history[:-1], *args], request=request)
+        response = self.fn(*inputs)
         history.append({'role': 'assistant', 'content': None})
         for _response in response:
             history[-1]['content'] = _response
