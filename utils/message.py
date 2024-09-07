@@ -17,12 +17,12 @@ def get_spinner(variant='primary'):
 
 MESSAGE_TEMPLATE = """
 {% if msg.details %}
-    <div class="details card bg-primary text-white">
+    <div class="details">
     {% for detail in msg.details %}
         {% if detail.before %}
-            <details>
-                <summary class="card-header">{{ detail.title }}</summary>
-                <p class="card-body card-text">{{ detail.content }}</p>
+            <details class="card bg-primary" style="margin-top: 10px; margin-bottom: 10px;">
+                <summary class="card-header text-white">{{ detail.title }}</summary>
+                <p class="card-body card-text text-white" style="margin-top: 0px">{{ detail.content }}</p>
             </details>
         {% endif %}
     {% endfor %}
@@ -86,7 +86,7 @@ MESSAGE_TEMPLATE = """
         <div class="card" style="width: 18rem;">
             <img src="{{ _prefix_local_file(card.image) }}" class="card-img-top" alt="{{ _basename(card.image) }}">
             <div class="card-body">
-                <h5 class="card-title"><b>{{ card.title }}</b></h5>
+                <h5 class="card-title"><b class="text-primary">{{ card.title }}</b></h5>
                 <p class="card-text text-primary">{{ card.text }}</p>
                 {% if card.buttons %}
                     {% for button in card.buttons %}
@@ -121,12 +121,12 @@ MESSAGE_TEMPLATE = """
     </div>
 {% endif %}
 {% if msg.details %}
-    <div class="details card bg-primary text-white">
+    <div class="details">
     {% for detail in msg.details %}
         {% if not detail.before %}
-            <details>
-                <summary class="card-header">{{ detail.title }}</summary>
-                <p class="card-body card-text">{{ detail.content }}</p>
+            <details class="card bg-primary" style="margin-top: 10px; margin-bottom: 10px;">
+                <summary class="card-header text-white">{{ detail.title }}</summary>
+                <p class="card-body card-text text-white" style="margin-top: 0px">{{ detail.content }}</p>
             </details>
         {% endif %}
     {% endfor %}
