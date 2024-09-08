@@ -123,6 +123,11 @@ def _show_status(*args):
     kwargs = {k: v for k, v in zip(additional_keys, args)}
     return kwargs
 
+def _calc_speed(session_state):
+    if 'usage' in session_state and 'elapsed_time' in session_state:
+        session_state['speed'] = session_state['usage']['total_tokens'] / session_state['elapsed_time']
+        session_state['speed_completion'] = session_state['usage']['completion_tokens'] / session_state['elapsed_time']
+
 ################################################################
 # Bot Functions
 ################################################################
@@ -146,6 +151,7 @@ def bot_fn(message, history, **kwargs):
     else:
         bot_fn_map = {
             'random': _random_bot_fn,
+            'gpt-4o': _llm_call,
         }
         bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
 
@@ -168,6 +174,7 @@ def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
         _speech_synthesis(_rerender_message(bot_message, format='speech'))
 
     kwargs['session_state']['elapsed_time'] = time.time() - __TIC
+    _calc_speed(kwargs['session_state'])
     print(pprint.pformat(kwargs))
     return bot_message
 
@@ -184,6 +191,7 @@ def bot_fn_wrapper_prod(message, history, request: gr.routes.Request, session_st
         _speech_synthesis(_rerender_message(bot_message, format='speech'))
 
     kwargs['session_state']['elapsed_time'] = time.time() - __TIC
+    _calc_speed(kwargs['session_state'])
     print(pprint.pformat(kwargs))
     return bot_message
 

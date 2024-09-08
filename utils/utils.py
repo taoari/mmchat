@@ -1,6 +1,22 @@
 from functools import wraps
 import inspect
 import re
+import tiktoken
+
+def llm_count_tokens(messages, model="gpt-3.5-turbo"):
+    encoding = tiktoken.encoding_for_model(model)
+    
+    # Rough estimate: 3 tokens for every message's metadata (role, etc.)
+    tokens_per_message = 3
+
+    total_tokens = 0
+    for message in messages:
+        # Count tokens in the message content
+        total_tokens += len(encoding.encode(message["content"]))
+        # Add rough estimate for message metadata
+        total_tokens += tokens_per_message
+
+    return total_tokens
 
 def replace_extra_newlines(text):
     # Replace more than two newlines (with possible whitespaces in between) with exactly two newlines

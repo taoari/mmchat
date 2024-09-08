@@ -135,6 +135,8 @@ def _llm_call(message, history, **kwargs):
     )
     bot_message = resp.choices[0].message.content
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: openai ({chat_engine})')
+    if hasattr(resp, 'usage'):
+        kwargs['session_state']['usage'] = resp.usage.__dict__
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
@@ -152,4 +154,9 @@ def _llm_call_stream(message, history, **kwargs):
             bot_message += _resp.choices[0].delta.content
         yield bot_message
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: openai_stream ({chat_engine})')
+    from utils.utils import llm_count_tokens
+    prompt_tokens = llm_count_tokens(messages)
+    completion_tokens = llm_count_tokens([{'role': 'assistant', 'content': bot_message }])
+    kwargs['session_state']['usage'] = {'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 
+                                        'total_tokens': prompt_tokens + completion_tokens}
     return bot_message
