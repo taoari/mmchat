@@ -28,7 +28,8 @@ CACHE = {"vectorstores": {}}
 from app import SETTINGS
 SETTINGS['Settings']['chat_engine'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'rag', 'rag_rewrite_retrieve_read'], 
+            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o',
+                        'rag', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
             'value': 'rag', 
             'interactive': True, 
             'label': "Chat Engine"
@@ -69,7 +70,7 @@ def format_document(doc, score):
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
     collection = kwargs.get('collection', 'default')
-    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    chat_engine = 'gpt-3.5-turbo'
     vectordb = CACHE['vectorstores'][collection]
 
     # Perform similarity search
@@ -87,9 +88,27 @@ def _rag_bot_fn(message, history, **kwargs):
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
-def _rag_rewrite_retrieve_read(message, history, **kwargs):
+def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
     return rewrite_retrieval_read(message)
+
+def _rag_rewrite_retrieve_read(message, history, **kwargs):
+    collection = kwargs.get('collection', 'default')
+    chat_engine = 'gpt-3.5-turbo'
+    vectordb = CACHE['vectorstores'][collection]
+
+    # Perform similarity search
+    docs_with_scores = vectordb.similarity_search_with_score(message, k=3)
+    docs = [doc for doc, score in docs_with_scores]
+    scores = [1.0 - score for _, score in docs_with_scores]
+    sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
+
+    def retriever(query):
+        return '\n\n'.join([doc.page_content for doc in docs])
+    
+    from utils.bot_fn import rewrite_retrieval_read
+    bot_response = rewrite_retrieval_read(message, retriever=retriever)
+    return render_message({'text': bot_response, 'references': [{'title': "Sources", 'sources': sources}]})
 
 def _slash_bot_fn(message, history, **kwargs):
     """Handle bot commands starting with '/' or '.'."""
@@ -115,6 +134,7 @@ def bot_fn(message, history, **kwargs):
             'random': _random_bot_fn,
             'rag': _rag_bot_fn,
             'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
+            'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
         bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
 

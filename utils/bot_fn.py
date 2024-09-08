@@ -1,4 +1,4 @@
-def rewrite_retrieval_read(query):
+def rewrite_retrieval_read(query, retriever=None):
     from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
@@ -17,10 +17,11 @@ def rewrite_retrieval_read(query):
 
     model = ChatOpenAI(temperature=0)
 
-    search = DuckDuckGoSearchAPIWrapper()
-
-    def retriever(query):
+    def _retriever(query):
+        search = DuckDuckGoSearchAPIWrapper()
         return search.run(query)
+    
+    retriever = _retriever if retriever is None else retriever
 
     template = """Provide a better search query for \
     web search engine to answer the given question, end \
