@@ -97,7 +97,8 @@ def _rag_bot_fn(message, history, **kwargs):
 
 def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
-    res = rewrite_retrieval_read(message)
+    res = {}
+    rewrite_retrieval_read(message, res=res)
     return render_message({
         'text': res['output'],
         'details': [{'title': "🛠️ Query rewrite", 'content': res['rewrite'], 'before': True}],
@@ -107,18 +108,19 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
     collection = kwargs.get('collection', 'default')
     chat_engine = 'gpt-3.5-turbo'
     vectordb = CACHE['vectorstores'][collection]
-
-    # Perform similarity search
-    docs_with_scores = vectordb.similarity_search_with_score(message, k=3)
-    docs = [doc for doc, score in docs_with_scores]
-    scores = [1.0 - score for _, score in docs_with_scores]
-    sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
+    res = {}
 
     def retriever(query):
+        docs_with_scores = vectordb.similarity_search_with_score(query, k=3)
+        docs = [doc for doc, score in docs_with_scores]
+        scores = [1.0 - score for _, score in docs_with_scores]
+        res.update({"docs": docs, "scores": scores})
         return '\n\n'.join([doc.page_content for doc in docs])
     
     from utils.bot_fn import rewrite_retrieval_read
-    res = rewrite_retrieval_read(message, retriever=retriever)
+    rewrite_retrieval_read(message, retriever=retriever, res=res)
+
+    sources = [format_document(doc, score) for doc, score in zip(res['docs'], res['scores'])]
     return render_message({
         'text': res['output'],
         'details': [{'title': "🛠️ Query rewrite", 'content': res['rewrite'], 'before': True}],

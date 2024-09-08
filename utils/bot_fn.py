@@ -1,4 +1,4 @@
-def rewrite_retrieval_read(query, retriever=None):
+def rewrite_retrieval_read(query, retriever=None, res={}):
     from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
@@ -32,7 +32,7 @@ def rewrite_retrieval_read(query, retriever=None):
     def _parse(text):
         return text.strip('"').strip("**")
     
-    res = {"input": query}
+    res['input'] = query
 
     def log_output(key):
         """Log generator for LangChain intermediate results."""
@@ -53,7 +53,7 @@ def rewrite_retrieval_read(query, retriever=None):
         | StrOutputParser()
     )
     res['output'] = rewrite_retrieve_read_chain.invoke(query)
-    return res
+    return res['output']
 
 if __name__ == "__main__":
     from langchain.globals import set_debug, set_verbose
