@@ -11,6 +11,9 @@ from utils.message import parse_message, render_message, _prefix_local_file
 from dotenv import load_dotenv
 from utils import prompts, llms
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
+from langchain.globals import set_debug
+
+set_debug(True)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +24,15 @@ _default_session_state = {
     'messages': [],
 }
 CACHE = {"vectorstores": {}}
+
+from app import SETTINGS
+SETTINGS['Settings']['chat_engine'] = {
+            'cls': 'Dropdown', 
+            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'rag', 'rag_rewrite_retrieve_read'], 
+            'value': 'rag', 
+            'interactive': True, 
+            'label': "Chat Engine"
+        }
 
 # Utility functions
 def _clear(session_state):
@@ -75,6 +87,10 @@ def _rag_bot_fn(message, history, **kwargs):
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
+def _rag_rewrite_retrieve_read(message, history, **kwargs):
+    from utils.bot_fn import rewrite_retrieval_read
+    return rewrite_retrieval_read(message)
+
 def _slash_bot_fn(message, history, **kwargs):
     """Handle bot commands starting with '/' or '.'."""
     cmd, *args = message[1:].split(' ', maxsplit=1)
@@ -95,7 +111,12 @@ def bot_fn(message, history, **kwargs):
     if message.startswith(('/', '.')):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
-        bot_message = _rag_bot_fn(message, history, **kwargs)
+        bot_fn_map = {
+            'random': _random_bot_fn,
+            'rag': _rag_bot_fn,
+            'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
+        }
+        bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
 
     # Stream or yield bot message
     if isinstance(bot_message, str):
