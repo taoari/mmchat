@@ -90,7 +90,11 @@ def _rag_bot_fn(message, history, **kwargs):
 
 def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
-    return rewrite_retrieval_read(message)
+    res = rewrite_retrieval_read(message)
+    return render_message({
+        'text': res['output'],
+        'details': [{'title': "🛠️ Query rewrite", 'content': res['rewrite'], 'before': True}],
+    })
 
 def _rag_rewrite_retrieve_read(message, history, **kwargs):
     collection = kwargs.get('collection', 'default')
@@ -107,8 +111,12 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
         return '\n\n'.join([doc.page_content for doc in docs])
     
     from utils.bot_fn import rewrite_retrieval_read
-    bot_response = rewrite_retrieval_read(message, retriever=retriever)
-    return render_message({'text': bot_response, 'references': [{'title': "Sources", 'sources': sources}]})
+    res = rewrite_retrieval_read(message, retriever=retriever)
+    return render_message({
+        'text': res['output'],
+        'details': [{'title': "🛠️ Query rewrite", 'content': res['rewrite'], 'before': True}],
+        'references': [{'title': "Sources", 'sources': sources}],
+    })
 
 def _slash_bot_fn(message, history, **kwargs):
     """Handle bot commands starting with '/' or '.'."""

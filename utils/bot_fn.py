@@ -31,8 +31,17 @@ def rewrite_retrieval_read(query, retriever=None):
 
     def _parse(text):
         return text.strip('"').strip("**")
+    
+    res = {"input": query}
 
-    rewriter = rewrite_prompt | ChatOpenAI(temperature=0) | StrOutputParser() | _parse
+    def log_output(key):
+        """Log generator for LangChain intermediate results."""
+        def inner(context):
+            res[key] = context
+            return context
+        return inner
+
+    rewriter = rewrite_prompt | ChatOpenAI(temperature=0) | StrOutputParser() | _parse | log_output('rewrite')
 
     rewrite_retrieve_read_chain = (
         {
@@ -43,8 +52,8 @@ def rewrite_retrieval_read(query, retriever=None):
         | model
         | StrOutputParser()
     )
-
-    return rewrite_retrieve_read_chain.invoke(query)
+    res['output'] = rewrite_retrieve_read_chain.invoke(query)
+    return res
 
 if __name__ == "__main__":
     from langchain.globals import set_debug, set_verbose
