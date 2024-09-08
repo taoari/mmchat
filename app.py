@@ -53,7 +53,7 @@ SETTINGS = {
         'system_prompt': {'cls': 'Textbox', 'interactive': True, 'lines': 5, 'label': "System Prompt"},
         'chat_engine': {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
+            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
             'value': 'auto', 
             'interactive': True, 
             'label': "Chat Engine"
@@ -139,7 +139,7 @@ def _slash_bot_fn(message, history, **kwargs):
 
 def bot_fn(message, history, **kwargs):
     # Default "auto" behavior
-    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
+    AUTOS = {'chat_engine': 'gpt-4o-mini'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 

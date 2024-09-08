@@ -35,7 +35,7 @@ CACHE = {"vectorstores": {}}
 from app import SETTINGS
 SETTINGS['Settings']['chat_engine'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o',
+            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o',
                         'rag', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
             'value': 'rag', 
             'interactive': True, 
@@ -77,7 +77,7 @@ def format_document(doc, score):
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
     collection = kwargs.get('collection', 'default')
-    chat_engine = 'gpt-3.5-turbo'
+    chat_engine = 'gpt-4o-mini'
     vectordb = CACHE['vectorstores'][collection]
 
     # Perform similarity search
@@ -106,7 +106,7 @@ def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
 
 def _rag_rewrite_retrieve_read(message, history, **kwargs):
     collection = kwargs.get('collection', 'default')
-    chat_engine = 'gpt-3.5-turbo'
+    chat_engine = 'gpt-4o-mini'
     vectordb = CACHE['vectorstores'][collection]
     res = {}
 
@@ -135,7 +135,7 @@ def _slash_bot_fn(message, history, **kwargs):
 def bot_fn(message, history, **kwargs):
     """Main bot function to handle both commands and regular messages."""
     # Default "auto" behavior
-    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
+    AUTOS = {'chat_engine': 'gpt-4o-mini'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 

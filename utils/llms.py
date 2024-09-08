@@ -105,7 +105,7 @@ def __llm_call_preprocess(message, history, **kwargs):
     _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
                    max_tokens=kwargs.get('max_tokens', 1024))
     system_prompt = kwargs.get('system_prompt', None)
-    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
 
     messages = []
     if system_prompt:
@@ -126,7 +126,7 @@ def __llm_call_preprocess(message, history, **kwargs):
     return client, model_id, messages, _kwargs
 
 def _llm_call(message, history, **kwargs):
-    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
     client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,
@@ -140,7 +140,7 @@ def _llm_call(message, history, **kwargs):
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
-    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
     client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,

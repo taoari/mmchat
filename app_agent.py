@@ -33,7 +33,7 @@ AVAILABLE_TOOLS = [obj["function"]["name"] for obj in TOOLS_SCHEMA if obj["type"
 from app import SETTINGS
 SETTINGS['Settings']['chat_engine'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o', 'openai_agent', 'langchain_agent'], 
+            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o', 'openai_agent', 'langchain_agent'], 
             'value': 'openai_agent', 
             'interactive': True, 
             'label': "Chat Engine"
@@ -178,7 +178,7 @@ def _slash_bot_fn(message, history, **kwargs):
 def bot_fn(message, history, **kwargs):
     """Main bot function to handle both commands and regular messages."""
     # Default "auto" behavior
-    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
+    AUTOS = {'chat_engine': 'gpt-4o-mini'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
