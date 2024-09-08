@@ -18,6 +18,13 @@ set_debug(True)
 # Load environment variables from .env file
 load_dotenv()
 
+if os.environ.get('LLM_TRACING') == 'phoenix':
+    import phoenix as px
+    from phoenix.trace.langchain import LangChainInstrumentor
+    os.environ['PHOENIX_PROJECT_NAME'] = "app-rag"
+    # Initialize Langchain auto-instrumentation
+    LangChainInstrumentor().instrument()
+
 # Default session state
 _default_session_state = {
     'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
