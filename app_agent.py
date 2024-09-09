@@ -11,6 +11,8 @@ from utils.message import parse_message, render_message, _prefix_local_file
 from dotenv import load_dotenv
 from utils import prompts, llms
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
+import langchain
+langchain.verbose = True
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,7 +35,7 @@ AVAILABLE_TOOLS = [obj["function"]["name"] for obj in TOOLS_SCHEMA if obj["type"
 from app import SETTINGS
 SETTINGS['Settings']['chat_engine'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o', 'openai_agent', 'langchain_agent'], 
+            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o', 'openai_agent', 'langchain_agent', 'langchain_agent_stream'], 
             'value': 'openai_agent', 
             'interactive': True, 
             'label': "Chat Engine"
@@ -134,40 +136,59 @@ def _openai_agent_bot_fn(message, history, **kwargs):
     return bot_message
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
-    system_prompt = prompts.PROMPT_CHECK_DELIVERY_DATE
-    session_state = kwargs['session_state']
     chat_engine = 'gpt-4o'
+    from langchain import hub
+    from langchain_community.chat_models import ChatOpenAI
+    from langchain.agents import AgentExecutor, create_openai_tools_agent, load_tools
+    from langchain_core.tools import StructuredTool
 
-    messages = history
-    if message:
-        messages += [{'role': 'user', 'content': message}]
-    if system_prompt:
-        messages = [{'role': 'system', 'content': system_prompt}] + messages
+    def convert_to_structured_tool(tool):
+        return StructuredTool.from_function(tool.func, name=tool.name, description=tool.description)
 
-    from langchain.agents import initialize_agent
-    from langchain.agents import AgentType
+    prompt = hub.pull("hwchase17/openai-tools-agent")
+    model = ChatOpenAI(temperature=0, model=chat_engine)
 
-    from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(temperature=0, model=chat_engine)
-    
-    from utils.tools_langchain import get_tools
-    tools = get_tools()
-    from langchain.memory import ConversationBufferMemory
-    from langchain_core.prompts import MessagesPlaceholder
+    tools = load_tools(['serpapi'])
+    tools = [convert_to_structured_tool(tool) for tool in tools]
 
-    agent_kwargs = {
-        "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
-    }
+    agent = create_openai_tools_agent(model, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools)
 
-    if 'memory' not in session_state:
-        session_state['memory'] = ConversationBufferMemory(memory_key="memory", return_messages=True)
-    memory = session_state['memory']
-    print(memory.load_memory_variables({}))
+    bot_message = agent_executor.invoke({"input": message})['output']
+    _print_messages(history + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
+    return bot_message
 
-    mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
-                agent_kwargs=agent_kwargs, memory=memory)
-    bot_message = mrkl.invoke(message)['output']
-    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
+def _langchain_agent_stream_bot_fn(message, history, **kwargs):
+    chat_engine = 'gpt-4o'
+    from langchain import hub
+    from langchain_community.chat_models import ChatOpenAI
+    from langchain.agents import AgentExecutor, create_openai_tools_agent, load_tools
+    from langchain_core.tools import StructuredTool
+
+    def convert_to_structured_tool(tool):
+        return StructuredTool.from_function(tool.func, name=tool.name, description=tool.description)
+
+    prompt = hub.pull("hwchase17/openai-tools-agent")
+    model = ChatOpenAI(temperature=0, model=chat_engine)
+
+    tools = load_tools(['serpapi'])
+    tools = [convert_to_structured_tool(tool) for tool in tools]
+
+    agent = create_openai_tools_agent(model, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+    res = {"text": "", "details": []}
+    for chunk in agent_executor.stream({"input": message}):
+        if 'steps' in chunk:
+            for step in chunk["steps"]:
+                res["details"].append({"title": f"🧠 Used tool: {step.action.tool}", "content": step.action.log, "before": True})
+                yield render_message(res)
+        if 'output' in chunk:
+            res["text"] = chunk["output"]
+            yield render_message(res)
+
+    bot_message = render_message(res)
+    _print_messages(history + [{'role': 'assistant', 'content': bot_message }], tag=f':: langchain_agent ({chat_engine})')
     return bot_message
 
 def _slash_bot_fn(message, history, **kwargs):
@@ -195,6 +216,7 @@ def bot_fn(message, history, **kwargs):
             'random': _random_bot_fn,
             'openai_agent': _openai_agent_bot_fn,
             'langchain_agent': _langchain_agent_bot_fn,
+            'langchain_agent_stream': _langchain_agent_stream_bot_fn,
         }
         bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
 

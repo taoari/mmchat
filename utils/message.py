@@ -20,7 +20,7 @@ MESSAGE_TEMPLATE = """
     <div class="details">
     {% for detail in msg.details %}
         {% if detail.before %}
-            <details class="card bg-primary" style="margin-top: 10px !important; margin-bottom: 10px !important;">
+            <details class="card bg-secondary" style="margin-top: 10px !important; margin-bottom: 10px !important;">
                 <summary class="card-header text-white">{{ detail.title }}</summary>
                 <p class="card-body card-text text-white" style="margin-top: 0px">{{ detail.content }}</p>
             </details>
@@ -124,7 +124,7 @@ MESSAGE_TEMPLATE = """
     <div class="details">
     {% for detail in msg.details %}
         {% if not detail.before %}
-            <details class="card bg-primary" style="margin-top: 10px !important; margin-bottom: 10px !important;">
+            <details class="card bg-secondary" style="margin-top: 10px !important; margin-bottom: 10px !important;">
                 <summary class="card-header text-white">{{ detail.title }}</summary>
                 <p class="card-body card-text text-white" style="margin-top: 0px">{{ detail.content }}</p>
             </details>
