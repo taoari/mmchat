@@ -6,9 +6,10 @@ def gradio_chat(message):
     result = client.predict(
             message=message,
             system_prompt="",
-            chat_engine="auto",
             speech_synthesis=False,
-            temperature=0.7,
+            bot_fn="auto",
+            chat_engine="auto",
+            temperature=0.0,
             api_name="/chat"
     )
     return result

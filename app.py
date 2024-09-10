@@ -49,20 +49,26 @@ SETTINGS = {
         'show_status_btn': {'cls': 'Button', 'value': 'Show'}
     },
     'Settings': {
-        '__metadata': {'open': True, 'tabbed': False},
+        '__metadata': {'open': False, 'tabbed': False},
         'system_prompt': {'cls': 'Textbox', 'interactive': True, 'lines': 5, 'label': "System Prompt"},
+        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'interactive': True, 'label': "Speech Synthesis"}
+    },
+    'Parameters': {
+        '__metadata': {'open': True, 'tabbed': False},
+        'bot_fn': {
+            'cls': 'Dropdown',
+            'choices': ['auto', 'random', 'llm'],
+            'value': 'auto',
+            'label': 'Bot Function',
+        },
         'chat_engine': {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'random', 'gpt-4o-mini', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
+            'choices': ['auto', 'gpt-4o-mini', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
             'value': 'auto', 
             'interactive': True, 
             'label': "Chat Engine"
         },
-        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'interactive': True, 'label': "Speech Synthesis"}
-    },
-    'Parameters': {
-        '__metadata': {'open': False, 'tabbed': False},
-        'temperature': {'cls': 'Slider', 'minimum': 0, 'maximum': 1, 'value': 0.7, 'step': 0.1, 'interactive': True, 'label': "Temperature"}
+        'temperature': {'cls': 'Slider', 'minimum': 0, 'maximum': 1, 'value': 0.0, 'step': 0.1, 'interactive': True, 'label': "Temperature"}
     }
 }
 
@@ -139,7 +145,7 @@ def _slash_bot_fn(message, history, **kwargs):
 
 def bot_fn(message, history, **kwargs):
     # Default "auto" behavior
-    AUTOS = {'chat_engine': 'gpt-4o-mini'}
+    AUTOS = {'bot_fn': 'llm', 'chat_engine': 'gpt-4o-mini'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
@@ -151,9 +157,9 @@ def bot_fn(message, history, **kwargs):
     else:
         bot_fn_map = {
             'random': _random_bot_fn,
-            'gpt-4o': _llm_call,
+            'llm': _llm_call_stream,
         }
-        bot_message = bot_fn_map.get(kwargs['chat_engine'], _llm_call_stream)(message, history, **kwargs)
+        bot_message = bot_fn_map[kwargs['bot_fn']](message, history, **kwargs)
 
     if isinstance(bot_message, str):
         yield bot_message
