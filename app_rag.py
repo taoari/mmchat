@@ -39,6 +39,7 @@ SETTINGS['Parameters']['bot_fn'] = {
             'value': 'rag',
             'label': "Bot Function",
         }
+SETTINGS['Parameters']['query_k'] = {'cls': 'Slider', 'minimum': 1, 'maximum': 5, 'value': 3, 'step': 1, 'label': "Number of sources"}
 
 # Utility functions
 def _clear(session_state):
@@ -79,7 +80,7 @@ def _rag_bot_fn(message, history, **kwargs):
     vectordb = CACHE['vectorstores'][collection]
 
     # Perform similarity search
-    docs_with_scores = vectordb.similarity_search_with_score(message, k=3)
+    docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
     docs = [doc for doc, score in docs_with_scores]
     scores = [1.0 - score for _, score in docs_with_scores]
     sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
@@ -128,7 +129,7 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
     res = {}
 
     def retriever(query):
-        docs_with_scores = vectordb.similarity_search_with_score(query, k=3)
+        docs_with_scores = vectordb.similarity_search_with_score(query, k=kwargs.get('query_k', 3))
         docs = [doc for doc, score in docs_with_scores]
         scores = [1.0 - score for _, score in docs_with_scores]
         res.update({"docs": docs, "scores": scores})
