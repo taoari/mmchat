@@ -290,6 +290,20 @@ class ChatInterfaceProd(ChatInterface):
 
 js_chatbot_message = """
 function registerMessageButtons() {
+    <!-- fix mixed markdown and html -->
+    const bot_rows = document.querySelectorAll(".message-row.bot-row .md");
+    var converter = new showdown.Converter();
+    bot_rows.forEach(elem => {
+        elem.innerHTML = converter.makeHtml(elem.innerHTML);
+    });
+
+    <!-- fix file link -->
+    const links = document.querySelectorAll('.gradio-file');
+    links.forEach(link => {
+        link.setAttribute('target', '_blank');
+    });
+
+    <!-- fix button click -->
 	const collection = document.querySelectorAll(".btn-chatbot");
 	for (let i = 0; i < collection.length; i++) {
       // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
@@ -304,17 +318,6 @@ function registerMessageButtons() {
         document.getElementById("submit_btn").click();
         }; 
 	}
-
-    const links = document.querySelectorAll('.gradio-file');
-    links.forEach(link => {
-        link.setAttribute('target', '_blank');
-    });
-
-    const bot_rows = document.querySelectorAll(".message-row.bot-row .md");
-    var converter = new showdown.Converter();
-    bot_rows.forEach(elem => {
-        elem.innerHTML = converter.makeHtml(elem.innerHTML);
-    });
 }
 """
 
