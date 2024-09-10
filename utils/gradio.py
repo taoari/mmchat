@@ -61,6 +61,7 @@ class ChatInterface(gr.Blocks):
                             elem_id='chatbot_input')
                     submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True,
                             elem_id='submit_btn')
+                    stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
                     fake_response = gr.Textbox(visible=False, label="Response")
                 else:
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
@@ -72,7 +73,7 @@ class ChatInterface(gr.Blocks):
             retry_btn = gr.Button("Retry", scale=5, min_width=0)
             undo_btn = gr.Button("Undo", scale=5, min_width=0)
             clear_btn = gr.Button("Clear", scale=5, min_width=0)
-            stop_btn = gr.Button("Stop", visible=True, variant="stop", scale=2, min_width=0, interactive=True)
+            
             export_btn = gr.DownloadButton("📥", scale=1, min_width=0)
             export_btn_hidden = gr.DownloadButton("Export", scale=1, min_width=0, elem_id="export_btn_hidden", visible=False)
 
@@ -122,17 +123,27 @@ class ChatInterface(gr.Blocks):
             [textbox], queue=False, api_name='upload')
         export_btn.click(self._export, [chatbot], [export_btn_hidden], api_name=False).then(
             fn=None, inputs=None, outputs=None, js="() => document.querySelector('#export_btn_hidden').click()")
+        
+    def _set_visible_invisible(self):
+        "Set first component visible, second component invisible"
+        return gr.update(visible=True), gr.update(visible=False)
 
     def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
-        chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
+        chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False).then(
+            self._set_visible_invisible, None, [self.stop_btn, self.submit_btn]
+        )
         if self.is_generator:
             bot_msg = chat_msg.then(self._bot_stream_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         else:
             bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
+            self._set_visible_invisible, None, [self.submit_btn, self.stop_btn]
+        ).then(
             fn=None, inputs=None, outputs=None, js=js_chatbot_message)
-        self.stop_btn.click(None, None, None, cancels=[bot_msg])
+        self.stop_btn.click(None, None, None, cancels=[bot_msg]).then(
+            self._set_visible_invisible, None, [self.submit_btn, self.stop_btn]
+        )
 
     def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
         @wraps(self.fn)
