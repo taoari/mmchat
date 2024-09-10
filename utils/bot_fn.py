@@ -1,4 +1,4 @@
-def rewrite_retrieval_read(query, retriever=None, res={}):
+def rewrite_retrieval_read(query, retriever=None, model=None, res={}):
     from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
@@ -15,7 +15,8 @@ def rewrite_retrieval_read(query, retriever=None, res={}):
     """
     prompt = ChatPromptTemplate.from_template(template)
 
-    model = ChatOpenAI(temperature=0)
+    if model is None:
+        model = ChatOpenAI(temperature=0)
 
     def _retriever(query):
         search = DuckDuckGoSearchAPIWrapper()
@@ -41,7 +42,7 @@ def rewrite_retrieval_read(query, retriever=None, res={}):
             return context
         return inner
 
-    rewriter = rewrite_prompt | ChatOpenAI(temperature=0) | StrOutputParser() | _parse | log_output('rewrite')
+    rewriter = rewrite_prompt | model | StrOutputParser() | _parse | log_output('rewrite')
 
     rewrite_retrieve_read_chain = (
         {

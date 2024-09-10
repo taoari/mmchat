@@ -152,7 +152,7 @@ def _llm_call_stream(message, history, **kwargs):
     for _resp in resp:
         if hasattr(_resp.choices[0].delta, 'content') and _resp.choices[0].delta.content:
             bot_message += _resp.choices[0].delta.content
-        yield bot_message
+            yield bot_message
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: openai_stream ({chat_engine})')
     from utils.utils import llm_count_tokens
     prompt_tokens = llm_count_tokens(messages)

@@ -75,28 +75,47 @@ def format_document(doc, score):
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
     collection = kwargs.get('collection', 'default')
-    chat_engine = 'gpt-4o-mini'
+    chat_engine = kwargs['chat_engine']
     vectordb = CACHE['vectorstores'][collection]
 
     # Perform similarity search
     docs_with_scores = vectordb.similarity_search_with_score(message, k=3)
     docs = [doc for doc, score in docs_with_scores]
     scores = [1.0 - score for _, score in docs_with_scores]
+    sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
 
     # LLM response with RAG system prompt
     system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
-    kwargs.update({'chat_engine': chat_engine, 'system_prompt': system_prompt})
-
-    sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
-    bot_response = llms._llm_call_stream(message, history, **kwargs)
+    _kwargs = {**kwargs, 'system_prompt': system_prompt}
+    bot_response = llms._llm_call_stream(message, history, **_kwargs)
 
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
+def __llm_call_preprocess(**kwargs):
+    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+                   max_tokens=kwargs.get('max_tokens', 1024))
+    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
+
+    from langchain_openai import ChatOpenAI
+    from utils.llms import LLM_ENDPOINTS
+    if chat_engine in LLM_ENDPOINTS:
+        endpoint = LLM_ENDPOINTS[chat_engine]
+        llm = ChatOpenAI(
+            model=endpoint['model'],
+            openai_api_key="-",
+            openai_api_base=f"{endpoint['url']}/v1",
+            temperature=0,
+        )
+    else:
+        llm = ChatOpenAI(temperature=0, model=chat_engine)
+    return llm
+
 def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
     res = {}
-    rewrite_retrieval_read(message, res=res)
+    model = __llm_call_preprocess(**kwargs)
+    rewrite_retrieval_read(message, model=model, res=res)
     return render_message({
         'text': res['output'],
         'details': [{'title': "🛠️ Query rewrite", 'content': res['rewrite'], 'before': True}],
@@ -104,7 +123,7 @@ def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
 
 def _rag_rewrite_retrieve_read(message, history, **kwargs):
     collection = kwargs.get('collection', 'default')
-    chat_engine = 'gpt-4o-mini'
+    chat_engine = kwargs['chat_engine']
     vectordb = CACHE['vectorstores'][collection]
     res = {}
 
@@ -115,8 +134,9 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
         res.update({"docs": docs, "scores": scores})
         return '\n\n'.join([doc.page_content for doc in docs])
     
+    model = __llm_call_preprocess(**kwargs)
     from utils.bot_fn import rewrite_retrieval_read
-    rewrite_retrieval_read(message, retriever=retriever, res=res)
+    rewrite_retrieval_read(message, retriever=retriever, model=model, res=res)
 
     sources = [format_document(doc, score) for doc, score in zip(res['docs'], res['scores'])]
     return render_message({
