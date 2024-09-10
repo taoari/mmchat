@@ -184,20 +184,21 @@ class ChatInterface(gr.Blocks):
             history[-1]['content'] = _response
             yield history
     
-    def _retry(self, history, *args):
+    def _retry(self, history, request: Request, *args):
         if len(history) >= 2:
             message = history[-2]['content']
             _history = history[:-2]
+            inputs, _, _ = special_args(self.fn, inputs=[message, history[:-1], *args], request=request)
             if self.is_generator:
                 # clear history first
                 yield history[:-1]
 
-                response = self.fn(message, _history, *args)
+                response = self.fn(*inputs)
                 for _response in response:
                     history[-1]['content'] = _response
                     yield history
             else:
-                history[-1]['content'] = self.fn(message, _history, *args)
+                history[-1]['content'] = self.fn(*inputs)
                 yield history
         else:
             yield history
