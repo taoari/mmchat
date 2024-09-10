@@ -50,8 +50,8 @@ SETTINGS = {
     },
     'Settings': {
         '__metadata': {'open': False, 'tabbed': False},
-        'system_prompt': {'cls': 'Textbox', 'interactive': True, 'lines': 5, 'label': "System Prompt"},
-        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'interactive': True, 'label': "Speech Synthesis"}
+        'system_prompt': {'cls': 'Textbox', 'lines': 5, 'label': "System Prompt"},
+        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'label': "Speech Synthesis"}
     },
     'Parameters': {
         '__metadata': {'open': True, 'tabbed': False},
@@ -64,11 +64,10 @@ SETTINGS = {
         'chat_engine': {
             'cls': 'Dropdown', 
             'choices': ['auto', 'gpt-4o-mini', 'gpt-4o'] + list(llms.LLM_ENDPOINTS.keys()), 
-            'value': 'auto', 
-            'interactive': True, 
+            'value': 'auto',
             'label': "Chat Engine"
         },
-        'temperature': {'cls': 'Slider', 'minimum': 0, 'maximum': 1, 'value': 0.0, 'step': 0.1, 'interactive': True, 'label': "Temperature"}
+        'temperature': {'cls': 'Slider', 'minimum': 0, 'maximum': 1, 'value': 0.0, 'step': 0.1, 'label': "Temperature"}
     }
 }
 
