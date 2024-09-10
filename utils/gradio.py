@@ -72,11 +72,11 @@ class ChatInterface(gr.Blocks):
             retry_btn = gr.Button("Retry", scale=5, min_width=0)
             undo_btn = gr.Button("Undo", scale=5, min_width=0)
             clear_btn = gr.Button("Clear", scale=5, min_width=0)
+            stop_btn = gr.Button("Stop", visible=True, variant="stop", scale=2, min_width=0, interactive=True)
             export_btn = gr.DownloadButton("📥", scale=1, min_width=0)
             export_btn_hidden = gr.DownloadButton("Export", scale=1, min_width=0, elem_id="export_btn_hidden", visible=False)
 
         fake_api_btn = gr.Button("Fake API", visible=False)
-        stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
 
         self.type = type
         self.fn = fn
@@ -90,6 +90,7 @@ class ChatInterface(gr.Blocks):
         self.audio_btn = audio_btn
         self.textbox = textbox
         self.submit_btn = submit_btn
+        self.stop_btn = stop_btn
         self.retry_btn = retry_btn
         self.undo_btn = undo_btn
         self.clear_btn = clear_btn
@@ -131,6 +132,7 @@ class ChatInterface(gr.Blocks):
             bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
             fn=None, inputs=None, outputs=None, js=js_chatbot_message)
+        self.stop_btn.click(None, None, None, cancels=[bot_msg])
 
     def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
         @wraps(self.fn)
