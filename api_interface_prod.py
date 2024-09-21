@@ -1,6 +1,6 @@
 from gradio_client import Client
 
-client = Client("http://localhost:7860/")
+client = Client("http://localhost:7860/demo")
 
 def gradio_chat(message):
     result = client.predict(

@@ -302,6 +302,16 @@ class ChatInterfaceProd(ChatInterface):
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
         self._setup_submit(submit_btn.click, textbox, chatbot, additional_inputs, api_name=False)
 
+    def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
+        # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
+        chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
+        if self.is_generator:
+            bot_msg = chat_msg.then(self._bot_stream_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
+        else:
+            bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
+        bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
+            fn=None, inputs=None, outputs=None, js=js_chatbot_message)
+
 js_chatbot_message = """
 function registerMessageButtons() {
     <!-- fix mixed markdown and html -->
