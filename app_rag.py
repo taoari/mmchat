@@ -54,13 +54,26 @@ def _clear(session_state):
 
 def prebuild_vectorstores(args):
     """Prebuild vectorstores collection based on provided arguments."""
-    from utils.vectorstore import _build_vs_collection
-    CACHE['vectorstores']['default'] = _build_vs_collection(
-        'data/collections/default', 
-        'default', 
-        autogen_yaml=args.autogen_yaml, 
-        verbose=True
-    )
+    if args.vectorstore == 'chromadb':
+        from utils.vectorstore import _build_vs_collection
+        CACHE['vectorstores']['default'] = _build_vs_collection(
+            'data/collections/default', 
+            'default', 
+            autogen_yaml=args.autogen_yaml, 
+            verbose=True
+        )
+    elif args.vectorstore == 'elasticsearch':
+        from langchain_elasticsearch import ElasticsearchStore
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+
+        # TODO: collection name and embeddings
+        embeddings = HuggingFaceEmbeddings()
+
+        CACHE['vectorstores']['default'] = ElasticsearchStore(
+            "mycollection", embedding=embeddings, es_url="http://localhost:9200"
+        )
+    else:
+        raise ValueError(f"Invalid vectorstore type: {args.vectorstore}")
 
 def format_document(doc, score):
     """Format document for display."""
@@ -182,6 +195,8 @@ def parse_args():
         help='Mount path for gradio app.')
     parser.add_argument('--autogen-yaml', action='store_true', 
         help='Auto-generate YAML files for PDF documents.')
+    parser.add_argument('-vs', '--vectorstore', default='chromadb', choices=['chromadb', 'elasticsearch'], 
+        help='Vectorstore type')
 
     args = parser.parse_args()
     return args
