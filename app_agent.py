@@ -52,16 +52,6 @@ def _clear(session_state):
     return session_state
 
 # Bot functions
-def __helper_fn():
-    import openai
-    if True:
-        client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        model_id = 'gpt-4o'
-    else:
-        client = openai.OpenAI(base_url='http://localhost:8080/v1', api_key='-')
-        model_id = 'jsincn/phi-3-mini-128k-instruct-awq'
-    return client, model_id
-
 def _openai_agent_bot_fn(message, history, **kwargs):
     # NOTE: use messages instead of history for advanced features (e.g. function calling), can not undo or retry
     messages = kwargs['session_state']['messages']
@@ -71,7 +61,7 @@ def _openai_agent_bot_fn(message, history, **kwargs):
     tools_schema = [obj for obj in TOOLS_SCHEMA if obj['function']['name'] in kwargs['tools']]
     messages.append({'role': 'user', 'content': message})
 
-    client, model_id = __helper_fn()
+    client, model_id = llms._get_llm()
 
     try:
         # NOTE: TGI tools can have parse error in this call

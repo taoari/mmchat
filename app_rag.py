@@ -10,7 +10,7 @@ import gradio as gr
 from utils.message import parse_message, render_message, _prefix_local_file
 from dotenv import load_dotenv
 from utils import prompts, llms
-from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn, _print_messages
+from utils.llms import _random_bot_fn
 from langchain.globals import set_debug
 
 set_debug(True)
@@ -93,29 +93,10 @@ def _rag_bot_fn(message, history, **kwargs):
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
-def __llm_call_preprocess(**kwargs):
-    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
-                   max_tokens=kwargs.get('max_tokens', 1024))
-    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-
-    from langchain_openai import ChatOpenAI
-    from utils.llms import LLM_ENDPOINTS
-    if chat_engine in LLM_ENDPOINTS:
-        endpoint = LLM_ENDPOINTS[chat_engine]
-        llm = ChatOpenAI(
-            model=endpoint['model'],
-            openai_api_key="-",
-            openai_api_base=f"{endpoint['url']}/v1",
-            temperature=0,
-        )
-    else:
-        llm = ChatOpenAI(temperature=0, model=chat_engine)
-    return llm
-
 def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
     res = {}
-    model = __llm_call_preprocess(**kwargs)
+    model = llms._get_llm_langchain(**kwargs)
     rewrite_retrieval_read(message, model=model, res=res)
     return render_message({
         'text': res['output'],
@@ -135,7 +116,7 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
         res.update({"docs": docs, "scores": scores})
         return '\n\n'.join([doc.page_content for doc in docs])
     
-    model = __llm_call_preprocess(**kwargs)
+    model = llms._get_llm_langchain(**kwargs)
     from utils.bot_fn import rewrite_retrieval_read
     rewrite_retrieval_read(message, retriever=retriever, model=model, res=res)
 
@@ -172,7 +153,7 @@ def bot_fn(message, history, **kwargs):
             'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
             'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
-        bot_message = bot_fn_map.get(kwargs['bot_fn'], _llm_call_stream)(message, history, **kwargs)
+        bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, history, **kwargs)
 
     # Stream or yield bot message
     if isinstance(bot_message, str):

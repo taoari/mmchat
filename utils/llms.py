@@ -101,19 +101,8 @@ Hello *World*
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=":: random")
     return bot_message
 
-def __llm_call_preprocess(message, history, **kwargs):
-    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
-                   max_tokens=kwargs.get('max_tokens', 1024))
-    system_prompt = kwargs.get('system_prompt', None)
+def _get_llm(**kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-
-    messages = []
-    if system_prompt:
-        messages.append({'role': 'system', 'content': system_prompt})
-    messages.extend(history)
-    if message:
-        messages.append({'role': 'user', 'content': message})
-
     import openai
     if chat_engine in LLM_ENDPOINTS:
         endpoint = LLM_ENDPOINTS[chat_engine]
@@ -122,12 +111,45 @@ def __llm_call_preprocess(message, history, **kwargs):
     else:
         client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         model_id = chat_engine
+    return client, model_id
 
+def _get_llm_langchain(**kwargs):
+    _kwargs = dict(temperature=kwargs.get('temperature', 0))
+    chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
+
+    from langchain_openai import ChatOpenAI
+    if chat_engine in LLM_ENDPOINTS:
+        endpoint = LLM_ENDPOINTS[chat_engine]
+        llm = ChatOpenAI(
+            model=endpoint['model'],
+            openai_api_key="-",
+            openai_api_base=f"{endpoint['url']}/v1",
+            **_kwargs
+        )
+    else:
+        llm = ChatOpenAI(model=chat_engine, **_kwargs)
+    return llm
+    
+def _preprocess_messages(message, history, **kwargs):
+    _kwargs = dict(temperature=kwargs.get('temperature', 0))
+    system_prompt = kwargs.get('system_prompt', None)
+    
+    messages = []
+    if system_prompt:
+        messages.append({'role': 'system', 'content': system_prompt})
+    messages.extend(history)
+    if message:
+        messages.append({'role': 'user', 'content': message})
+    return messages, _kwargs
+    
+def _llm_preprocess(message, history, **kwargs):
+    client, model_id = _get_llm(**kwargs)
+    messages, _kwargs = _preprocess_messages(message, history, **kwargs)
     return client, model_id, messages, _kwargs
 
 def _llm_call(message, history, **kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-    client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
+    client, model_id, messages, _kwargs = _llm_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,
         messages=messages,
@@ -141,7 +163,7 @@ def _llm_call(message, history, **kwargs):
 
 def _llm_call_stream(message, history, **kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-    client, model_id, messages, _kwargs = __llm_call_preprocess(message, history, **kwargs)
+    client, model_id, messages, _kwargs = _llm_preprocess(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,
         messages=messages,
