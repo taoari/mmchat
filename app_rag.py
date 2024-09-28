@@ -66,10 +66,15 @@ def setup_vectorstores(args):
 def format_document(doc, score):
     """Format document for display."""
     file_ref = f"{doc.metadata['source']}#page={doc.metadata['page'] + 1}"
-    path = args.mount_path if args.env == 'prod_fastapi' else None
+    file_server = os.environ.get('FILE_SERVER', '')
+    if args.env == 'prod_fastapi':
+        link = _prefix_local_file(file_ref, args.mount_path)
+    else:
+        link = _prefix_local_file(file_ref)
+    link = file_server + link
     return {
         'text': f"📁 {os.path.basename(file_ref)}", 
-        'link': _prefix_local_file(file_ref, path), 
+        'link': link, 
         'score': score
     }
 
