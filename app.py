@@ -151,6 +151,10 @@ def bot_fn(message, history, **kwargs):
     if not history or message == '/clear':
         _clear(kwargs['session_state'])
 
+    # NOTE: maintain and use messages instead of history if bot reponse is not simple text
+    messages = kwargs['session_state']['messages']
+    messages.append({'role': 'user', 'content': message})
+
     if message.startswith('/') or message.startswith('.'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
@@ -158,12 +162,16 @@ def bot_fn(message, history, **kwargs):
             'random': _random_bot_fn,
             'llm': _llm_call_stream,
         }
-        bot_message = bot_fn_map[kwargs['bot_fn']](message, history, **kwargs)
+        bot_message = bot_fn_map[kwargs['bot_fn']](message, messages, **kwargs)
 
     if isinstance(bot_message, str):
         yield bot_message
     else:
-        yield from bot_message
+        for _bot_msg in bot_message:
+            yield _bot_msg
+        bot_message = _bot_msg
+
+    messages.append({'role': 'assistant', 'content': bot_message})
     return bot_message
 
 def bot_fn_wrapper(message, history, request: gr.routes.Request, *args):
