@@ -89,6 +89,7 @@ def _print_vectordb_info(vectordb):
     if 'chroma' in vectordb.__class__.__name__.lower():
         print(f"\tvector db {vectordb._collection.name} has {vectordb._collection.count()} records")
 
+
 def build_vectordb(vectorstore, collection_name, folder):
     vectordb = get_vectordb(vectorstore, collection_name)
     pdfs = sorted(glob.glob(os.path.join(folder, '**', '*.pdf'), recursive=True))
