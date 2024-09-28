@@ -29,13 +29,14 @@ if os.environ.get('LLM_TRACING') == 'phoenix':
 _default_session_state = {
     'context_switch_at': 0,  # History before this point should be ignored (e.g., after uploading an image or file)
     'messages': [],
+    'bot_fn': None, # overwrite bot_fn
 }
-CACHE = {"vectorstores": {}}
+CACHE = {"vectorstores": {}, "clients": {}}
 
 from app import SETTINGS
 SETTINGS['Parameters']['bot_fn'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'llm', 'rag', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
+            'choices': ['auto', 'llm', 'search', 'rag', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
             'value': 'rag',
             'label': "Bot Function",
         }
@@ -79,6 +80,14 @@ def format_document(doc, score):
     }
 
 # Bot functions
+def _search_bot_fn(message, history, **kwargs):
+    # NOTE: only implemented for elasticsearch
+    if 'elasticsearch' not in CACHE['clients']:
+        from utils.vectorstore2 import get_client
+        client = get_client('elasticsearch')
+
+    return f'Not Implemented for {args.vectorstore}.'
+
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
     collection = kwargs.get('collection', 'default')
@@ -136,7 +145,12 @@ def _rag_rewrite_retrieve_read(message, history, **kwargs):
 def _slash_bot_fn(message, history, **kwargs):
     """Handle bot commands starting with '/' or '.'."""
     cmd, *args = message[1:].split(' ', maxsplit=1)
-    return message  # Command handling can be customized here
+    if cmd in ['search', 'rag']:
+        kwargs['session_state']['bot_fn'] = cmd
+        bot_message = f'Set bot_fn to **{cmd}**.'
+    else:
+        bot_message = f'You said: {message}'
+    return bot_message  # Command handling can be customized here
 
 def bot_fn(message, history, **kwargs):
     """Main bot function to handle both commands and regular messages."""
@@ -159,10 +173,12 @@ def bot_fn(message, history, **kwargs):
     else:
         bot_fn_map = {
             'random': _random_bot_fn,
+            'search': _search_bot_fn,
             'rag': _rag_bot_fn,
             'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
             'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
+        kwargs['bot_fn'] = kwargs['session_state']['bot_fn'] if kwargs['session_state']['bot_fn'] is not None else kwargs['bot_fn']
         bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, messages, **kwargs)
 
     # Stream or yield bot message
