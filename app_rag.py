@@ -7,7 +7,7 @@ import jinja2
 import pprint
 import gradio as gr
 
-from utils.message import parse_message, render_message, _prefix_local_file
+from utils.message import parse_message, render_message, _prefix_local_file, _rerender_message
 from dotenv import load_dotenv
 from utils import prompts, llms
 from utils.llms import _random_bot_fn
@@ -40,6 +40,7 @@ SETTINGS['Parameters']['bot_fn'] = {
             'label': "Bot Function",
         }
 SETTINGS['Parameters']['query_k'] = {'cls': 'Slider', 'minimum': 1, 'maximum': 5, 'value': 3, 'step': 1, 'label': "Number of sources"}
+SETTINGS['Parameters']['format'] = {'cls': 'Dropdown', 'value': 'auto', 'choices': ['auto', 'html', 'json'], 'label': "Response Format"}
 
 # Utility functions
 def _clear(session_state):
@@ -136,7 +137,7 @@ def _slash_bot_fn(message, history, **kwargs):
 def bot_fn(message, history, **kwargs):
     """Main bot function to handle both commands and regular messages."""
     # Default "auto" behavior
-    AUTOS = {'bot_fn': 'llm', 'chat_engine': 'gpt-4o-mini'}
+    AUTOS = {'bot_fn': 'llm', 'chat_engine': 'gpt-4o-mini', 'format': 'html'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
@@ -144,9 +145,13 @@ def bot_fn(message, history, **kwargs):
     if not history or message == '/clear':
         _clear(kwargs['session_state'])
 
+    # NOTE: maintain and use messages instead of history if bot reponse is not simple text
+    messages = kwargs['session_state']['messages']
+    messages.append({'role': 'user', 'content': message})
+
     # Handle commands or regular conversation
     if message.startswith(('/', '.')):
-        bot_message = _slash_bot_fn(message, history, **kwargs)
+        bot_message = _slash_bot_fn(message, messages, **kwargs)
     else:
         bot_fn_map = {
             'random': _random_bot_fn,
@@ -154,13 +159,18 @@ def bot_fn(message, history, **kwargs):
             'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
             'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
-        bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, history, **kwargs)
+        bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, messages, **kwargs)
 
     # Stream or yield bot message
     if isinstance(bot_message, str):
-        yield bot_message
+        yield _rerender_message(bot_message, kwargs['format'])
     else:
-        yield from bot_message
+        for _bot_msg in bot_message:
+            yield _rerender_message(_bot_msg, kwargs['format'])
+        bot_message = _bot_msg
+
+    messages.append({'role': 'assistant', 'content': bot_message})
+    return bot_message
 
 # Argument parser
 def parse_args():

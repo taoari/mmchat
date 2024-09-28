@@ -301,7 +301,9 @@ def test_parse_message_details():
     assert target == parse_message(render_message(target), cleanup=True)
 
 def _rerender_message(message, format='plain'):
-    return render_message(parse_message(message), format=format)
+    if format == 'html':
+        return message
+    return render_message(parse_message(message, cleanup=True), format=format)
 
 def _rerender_history(history, format='plain'):
     res = []

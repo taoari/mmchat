@@ -7,6 +7,7 @@ def gradio_chat(message):
             message=message,
             system_prompt="",
             speech_synthesis=False,
+            # format="json",
             bot_fn="auto",
             chat_engine="auto",
             temperature=0.0,

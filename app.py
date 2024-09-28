@@ -51,7 +51,8 @@ SETTINGS = {
     'Settings': {
         '__metadata': {'open': False, 'tabbed': False},
         'system_prompt': {'cls': 'Textbox', 'lines': 5, 'label': "System Prompt"},
-        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'label': "Speech Synthesis"}
+        'speech_synthesis': {'cls': 'Checkbox', 'value': False, 'label': "Speech Synthesis"},
+        'format': {'cls': 'Dropdown', 'value': 'auto', 'choices': ['auto', 'html', 'json'], 'label': "Response Format"}
     },
     'Parameters': {
         '__metadata': {'open': True, 'tabbed': False},
@@ -144,7 +145,7 @@ def _slash_bot_fn(message, history, **kwargs):
 
 def bot_fn(message, history, **kwargs):
     # Default "auto" behavior
-    AUTOS = {'bot_fn': 'llm', 'chat_engine': 'gpt-4o-mini'}
+    AUTOS = {'bot_fn': 'llm', 'chat_engine': 'gpt-4o-mini', 'format': 'html'}
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
@@ -165,10 +166,10 @@ def bot_fn(message, history, **kwargs):
         bot_message = bot_fn_map[kwargs['bot_fn']](message, messages, **kwargs)
 
     if isinstance(bot_message, str):
-        yield bot_message
+        yield _rerender_message(bot_message, kwargs['format'])
     else:
         for _bot_msg in bot_message:
-            yield _bot_msg
+            yield _rerender_message(_bot_msg, kwargs['format'])
         bot_message = _bot_msg
 
     messages.append({'role': 'assistant', 'content': bot_message})
