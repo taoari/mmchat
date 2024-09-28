@@ -40,7 +40,6 @@ SETTINGS['Parameters']['bot_fn'] = {
             'label': "Bot Function",
         }
 SETTINGS['Parameters']['query_k'] = {'cls': 'Slider', 'minimum': 1, 'maximum': 5, 'value': 3, 'step': 1, 'label': "Number of sources"}
-SETTINGS['Parameters']['format'] = {'cls': 'Dropdown', 'value': 'auto', 'choices': ['auto', 'html', 'json'], 'label': "Response Format"}
 
 # Utility functions
 def _clear(session_state):
