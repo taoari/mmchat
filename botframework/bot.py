@@ -10,9 +10,9 @@ from gradio_client import Client
 
 load_dotenv()
 
-client = Client(os.environ.get('GRADIO_SERVER'))
+client = None
 
-def gradio_chat(message, session_hash=None):
+def _gradio_chat(message, session_hash=None):
     client.session_hash = session_hash if session_hash is not None else str(uuid.uuid4())
     
     result = client.predict(
@@ -20,6 +20,20 @@ def gradio_chat(message, session_hash=None):
             api_name="/chat"
     )
     return result
+
+def gradio_chat(message, session_hash=None):
+    """A wrapper of _gradio_chat to re-setup client if failed."""
+    global client
+    if client is None:
+        client = Client(os.environ.get('GRADIO_SERVER'))
+
+    try:
+        result = _gradio_chat(message, session_hash)
+    except:
+        client = Client(os.environ.get('GRADIO_SERVER'))
+        result = _gradio_chat(message, session_hash)
+    return result
+
 
 class MyBot(ActivityHandler):
     # See https://aka.ms/about-bot-activity-message to learn more about the message and other activity types.

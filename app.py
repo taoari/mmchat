@@ -130,7 +130,7 @@ def _show_status(*args):
     return kwargs
 
 def _calc_speed(session_state):
-    if 'usage' in session_state and 'elapsed_time' in session_state:
+    if 'usage' in session_state and 'elapsed_time' in session_state and session_state['elapsed_time'] > 0:
         session_state['speed'] = session_state['usage']['total_tokens'] / session_state['elapsed_time']
         session_state['speed_completion'] = session_state['usage']['completion_tokens'] / session_state['elapsed_time']
 
