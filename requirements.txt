@@ -11,18 +11,22 @@ openai
 huggingface_hub
 
 langchain
+langchain_text_splitters
 langchain_community
 langchain_openai
 langchain_huggingface
-langchain_elasticsearch
+
 
 # for RAG
 # sentence-transformers # depends on torch, which is large
 pypdf
 ruamel.yaml
 chromadb
-langchain_text_splitters
+
+langchain_elasticsearch
 langchain_chroma
+langchain_redis
+langchain_postgres
 
 # for Azure
 azure-cognitiveservices-speech
