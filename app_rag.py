@@ -82,11 +82,27 @@ def format_document(doc, score):
 # Bot functions
 def _search_bot_fn(message, history, **kwargs):
     # NOTE: only implemented for elasticsearch
-    if 'elasticsearch' not in CACHE['clients']:
-        from utils.vectorstore2 import get_client
-        client = get_client('elasticsearch')
+    vectorstore = args.vectorstore
+    if vectorstore != 'elasticsearch':
+        return "Search functionality is only implemented for elasticsearch."
+    
+    from utils.search import get_client, search
 
-    return f'Not Implemented for {args.vectorstore}.'
+    if vectorstore not in CACHE['clients']:
+        
+        client = get_client(vectorstore)
+        CACHE[vectorstore] = client
+    else:
+        client = CACHE[vectorstore]
+
+    results = search(client, 'mycollection', message)['hits']['hits']
+
+    from langchain_core.documents import Document
+    docs = [Document(page_content=res['_source']['text'], metadata=res['_source']['metadata']) for res in results]
+    scores = [res['_score'] for res in results]
+
+    sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
+    return render_message({'references': [{'title': "Sources", 'sources': sources}]})
 
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
