@@ -52,28 +52,16 @@ def _clear(session_state):
         session_state['session_hash'] = session_hash
     return session_state
 
-def prebuild_vectorstores(args):
-    """Prebuild vectorstores collection based on provided arguments."""
-    if args.vectorstore == 'chromadb':
-        from utils.vectorstore import _build_vs_collection
-        CACHE['vectorstores']['default'] = _build_vs_collection(
-            'data/collections/default', 
-            'default', 
-            autogen_yaml=args.autogen_yaml, 
-            verbose=True
-        )
-    elif args.vectorstore == 'elasticsearch':
-        from langchain_elasticsearch import ElasticsearchStore
-        from langchain_community.embeddings import HuggingFaceEmbeddings
+def setup_vectorstores(args):
+    """setup vectorstores collection based on provided arguments."""
+    from utils.vectorstore2 import get_vectordb, build_vectordb
 
-        # TODO: collection name and embeddings
-        embeddings = HuggingFaceEmbeddings()
-
-        CACHE['vectorstores']['default'] = ElasticsearchStore(
-            "mycollection", embedding=embeddings, es_url="http://localhost:9200"
-        )
+    if args.vectorstore == "chroma":
+        vectordb = build_vectordb(args.vectorstore, 'default', 'data/collections/default')
     else:
-        raise ValueError(f"Invalid vectorstore type: {args.vectorstore}")
+        vectordb = get_vectordb(args.vectorstore, 'mycollection')
+
+    CACHE['vectorstores']['default'] = vectordb
 
 def format_document(doc, score):
     """Format document for display."""
@@ -195,7 +183,7 @@ def parse_args():
         help='Mount path for gradio app.')
     parser.add_argument('--autogen-yaml', action='store_true', 
         help='Auto-generate YAML files for PDF documents.')
-    parser.add_argument('-vs', '--vectorstore', default='chromadb', choices=['chromadb', 'elasticsearch'], 
+    parser.add_argument('-vs', '--vectorstore', default='chroma', 
         help='Vectorstore type')
 
     args = parser.parse_args()
@@ -210,8 +198,8 @@ if __name__ == '__main__':
     app.bot_fn = bot_fn
     args = parse_args()
 
-    # Prebuild vectorstores and configure Gradio static paths
-    prebuild_vectorstores(args)
+    # setup vectorstores and configure Gradio static paths
+    setup_vectorstores(args)
     gr.set_static_paths(paths=["data/collections"])
 
     # Start the main app

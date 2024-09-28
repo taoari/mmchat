@@ -22,29 +22,40 @@ def index_file(vectordb, fname):
     docs = pages
     ids = [_get_hash(doc.page_content) for doc in docs]
 
+    print(f'\tlen(pages) = {len(pages)}, len(docs) = {len(docs)}')
+
     vectordb.add_documents(documents=docs, ids=ids)
 
 
-def get_vectordb(args):
+def get_vectordb(vectorstore, collection_name):
     from langchain_huggingface import HuggingFaceEmbeddings
     embeddings = HuggingFaceEmbeddings()
 
-    if args.vectorstore == 'elasticsearch':
+    if vectorstore == 'chroma':
+        from langchain_chroma import Chroma
+
+        vectordb = Chroma(
+            collection_name=collection_name,
+            embedding_function=embeddings,
+            collection_metadata={"hnsw:space": "cosine"}
+        )
+
+    elif vectorstore == 'elasticsearch':
         from langchain_elasticsearch import ElasticsearchStore
 
         ES_URL = "http://localhost:9200"
 
         vectordb = ElasticsearchStore(
-            args.collection_name, embedding=embeddings, es_url=ES_URL
+            collection_name, embedding=embeddings, es_url=ES_URL
         )
 
-    elif args.vectorstore == 'redis':
+    elif vectorstore == 'redis':
         from langchain_redis import RedisConfig, RedisVectorStore
 
         REDIS_URL = "redis://localhost:6379"
 
         config = RedisConfig(
-            index_name=args.collection_name,
+            index_name=collection_name,
             redis_url=REDIS_URL,
             metadata_schema=[
                 {"name": "source", "type": "text"},
@@ -54,7 +65,7 @@ def get_vectordb(args):
 
         vectordb = RedisVectorStore(embeddings, config=config)
 
-    elif args.vectorstore == 'pgvector':
+    elif vectorstore == 'pgvector':
         from langchain_core.documents import Document
         from langchain_postgres import PGVector
         from langchain_postgres.vectorstores import PGVector
@@ -64,15 +75,30 @@ def get_vectordb(args):
 
         vectordb = PGVector(
             embeddings=embeddings,
-            collection_name=args.collection_name,
+            collection_name=collection_name,
             connection=connection,
             use_jsonb=True,
         )
 
     else:
-        raise ValueError(f"Invalid vector store: {args.vectorstore}")
+        raise ValueError(f"Invalid vector store: {vectorstore}")
     return vectordb
 
+
+def _print_vectordb_info(vectordb):
+    if 'chroma' in vectordb.__class__.__name__.lower():
+        print(f"\tvector db {vectordb._collection.name} has {vectordb._collection.count()} records")
+
+def build_vectordb(vectorstore, collection_name, folder):
+    vectordb = get_vectordb(vectorstore, collection_name)
+    pdfs = sorted(glob.glob(os.path.join(folder, '**', '*.pdf'), recursive=True))
+
+    for i, fname in enumerate(pdfs):
+        print(f'Indexing {i} of {len(pdfs)}: {fname}')
+        index_file(vectordb, fname)
+        _print_vectordb_info(vectordb)
+
+    return vectordb
 
 def parse_args():
     """
@@ -88,7 +114,7 @@ def parse_args():
             help='Folder')
     parser.add_argument('-c', '--collection-name', default='mycollection',
             help='Collection name')
-    parser.add_argument('-vs', '--vectorstore', default='elasticsearch',
+    parser.add_argument('-vs', '--vectorstore', default='chroma',
             help='Vector store')
     parser.add_argument('--embeddings', default=None,
             help='Embeddings')
@@ -98,9 +124,4 @@ if __name__ == '__main__':
     args = parse_args()
     print(args)
 
-    vectordb = get_vectordb(args)
-    pdfs = sorted(glob.glob(os.path.join(args.folder, '**', '*.pdf'), recursive=True))
-
-    for i, fname in enumerate(pdfs):
-        print(f'Indexing: {fname}')
-        index_file(vectordb, fname)
+    build_vectordb(args.vectorstore, args.collection_name, args.folder)
