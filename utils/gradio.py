@@ -49,7 +49,7 @@ class ChatInterface(gr.Blocks):
             theme=theme,
         )
 
-        chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, label='Chatbot')
+        chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, label='Chatbot', elem_id='chatbot')
         chatbot_state = gr.State([])
 
         with gr.Group():
@@ -267,12 +267,15 @@ class ChatInterfaceProd(ChatInterface):
 
         chatbot_state = gr.State([])
         with gr.Group():
-            chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, show_label=False, container=False)
+            chatbot = _persist(gr.Chatbot(type=type, avatar_images=avatar_images, show_label=False, container=False, elem_id='chatbot'))
             textbox = gr.Textbox(placeholder="Type a message...", show_label=False, container=False, interactive=True, label="Message",
                     elem_id="chatbot_input")
             submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True, visible=False,
                     elem_id='submit_btn')
             fake_response = gr.Textbox(visible=False, label="Response")
+            with gr.Row():
+                clear_btn = gr.Button("Clear", scale=5, min_width=0, variant="primary")
+                clear_btn.click(self._clear, None, [chatbot, chatbot_state], api_name=False)
 
         fake_api_btn = gr.Button("Fake API", visible=False)
         stop_btn = gr.Button("Stop", visible=False, variant="stop", scale=1, min_width=0, interactive=True)
@@ -344,6 +347,24 @@ function registerMessageButtons() {
 	}
 }
 """
+
+from gradio.context import Context
+from gradio import Request
+
+
+def _persist(component):
+    sessions = {}
+
+    def resume_session(value, request: Request):
+        return sessions.get(request.username, value)
+
+    def update_session(value, request: Request):
+        sessions[request.username] = value
+
+    Context.root_block.load(resume_session, inputs=[component], outputs=component)
+    component.change(update_session, inputs=[component])
+
+    return component
 
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.

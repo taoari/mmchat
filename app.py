@@ -216,7 +216,7 @@ def get_demo():
     global COMPONENTS
     css = """
     #chatbot {
-        min-height: 600px;
+        min-height: 400px;
     }
     .full-container label {
         display: block;
@@ -266,17 +266,13 @@ def get_demo_prod():
     from utils.gradio import ChatInterfaceProd
     css = """
     #chatbot {
-        min-height: 600px;
+        min-height: 300px;
     }
     footer {
         display: none !important;
     }
     .message-row {
         margin: 8px 5px 2px 5px;
-    }
-    .full-container label {
-        display: block;
-        padding: 0 8px;
     }
     """
     with gr.Blocks(css=css, theme=gr.themes.Base()) as demo:
