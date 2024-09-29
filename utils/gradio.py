@@ -315,14 +315,17 @@ class ChatInterfaceProd(ChatInterface):
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False).then(
             fn=None, inputs=None, outputs=None, js=js_chatbot_message)
 
-js_chatbot_message = """
-function registerMessageButtons() {
+"""
     <!-- fix mixed markdown and html -->
     const bot_rows = document.querySelectorAll(".message-row.bot-row .md");
     var converter = new showdown.Converter();
     bot_rows.forEach(elem => {
         elem.innerHTML = converter.makeHtml(elem.innerHTML);
     });
+"""
+
+js_chatbot_message = """
+function registerMessageButtons() {
 
     <!-- fix file link -->
     const links = document.querySelectorAll('.gradio-file');
@@ -366,6 +369,10 @@ def _persist(component):
 
     return component
 
+"""
+<!-- for showdown -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js" integrity="sha512-LhccdVNGe2QMEfI3x4DVV3ckMRe36TfydKss6mJpdHjNFiV07dFpS2xzeZedptKZrwxfICJpez09iNioiSZ3hA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+"""
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
     """
@@ -374,8 +381,6 @@ def reload_javascript():
 <!-- for bootstrap -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
-<!-- for showdown -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js" integrity="sha512-LhccdVNGe2QMEfI3x4DVV3ckMRe36TfydKss6mJpdHjNFiV07dFpS2xzeZedptKZrwxfICJpez09iNioiSZ3hA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 """
     def template_response(*args, **kwargs):
         res = GradioTemplateResponseOriginal(*args, **kwargs)

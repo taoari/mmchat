@@ -7,7 +7,7 @@ import jinja2
 import pprint
 import gradio as gr
 
-from utils.message import parse_message, render_message, _prefix_local_file, _rerender_message
+from utils.message import parse_message, render_message, _prefix_local_file, _rerender_message, _rerender_history
 from dotenv import load_dotenv
 from utils import prompts, llms
 from utils.llms import _random_bot_fn
@@ -125,7 +125,9 @@ def _rag_bot_fn(message, history, **kwargs):
     # LLM response with RAG system prompt
     system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
     _kwargs = {**kwargs, 'system_prompt': system_prompt}
-    bot_response = llms._llm_call_stream(message, history, **_kwargs)
+    # NOTE: use messages and json for API, use history (persistence) and html for UI
+    _history = _rerender_history(history, 'plain')
+    bot_response = llms._llm_call_stream(message, _history, **_kwargs)
 
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
@@ -187,8 +189,7 @@ def bot_fn(message, history, **kwargs):
 
     # NOTE: maintain and use messages instead of history if bot reponse is not simple text
     messages = kwargs['session_state']['messages']
-    messages.append({'role': 'user', 'content': message})
-
+    
     # Handle commands or regular conversation
     if message.startswith(('/', '.')):
         bot_message = _slash_bot_fn(message, messages, **kwargs)
@@ -201,7 +202,7 @@ def bot_fn(message, history, **kwargs):
             'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
         kwargs['bot_fn'] = kwargs['session_state']['bot_fn'] if kwargs['session_state']['bot_fn'] is not None else kwargs['bot_fn']
-        bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, messages, **kwargs)
+        bot_message = bot_fn_map.get(kwargs['bot_fn'], llms._llm_call_stream)(message, history, **kwargs)
 
     # Stream or yield bot message
     if isinstance(bot_message, str):
@@ -211,7 +212,8 @@ def bot_fn(message, history, **kwargs):
             yield _rerender_message(_bot_msg, kwargs['format'])
         bot_message = _bot_msg
 
-    messages.append({'role': 'assistant', 'content': bot_message})
+    # messages.append({'role': 'user', 'content': message})
+    # messages.append({'role': 'assistant', 'content': bot_message})
     return bot_message
 
 # Argument parser
@@ -249,6 +251,7 @@ if __name__ == '__main__':
     from app import main
 
     # Set bot function and parse arguments
+    app._default_session_state = _default_session_state
     app.bot_fn = bot_fn
     args = parse_args()
 

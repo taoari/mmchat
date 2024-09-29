@@ -153,9 +153,9 @@ def bot_fn(message, history, **kwargs):
         _clear(kwargs['session_state'])
 
     # NOTE: maintain and use messages instead of history if bot reponse is not simple text
+    #       history supports persistence
     messages = kwargs['session_state']['messages']
-    messages.append({'role': 'user', 'content': message})
-
+    
     if message.startswith('/') or message.startswith('.'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
@@ -172,6 +172,7 @@ def bot_fn(message, history, **kwargs):
             yield _rerender_message(_bot_msg, kwargs['format'])
         bot_message = _bot_msg
 
+    messages.append({'role': 'user', 'content': message})
     messages.append({'role': 'assistant', 'content': bot_message})
     return bot_message
 

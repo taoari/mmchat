@@ -27,8 +27,8 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def _print_messages(messages, title='Chat history:', tag=""):
-    from markdownify import markdownify
-    from utils.utils import replace_extra_newlines
+    # from markdownify import markdownify
+    # from utils.utils import replace_extra_newlines
     icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖', 'tool': '🛠️', 'think': '🧠', 'message': '💬'}
     res = [] if title is None else [title]
     for message in messages:
@@ -36,7 +36,8 @@ def _print_messages(messages, title='Chat history:', tag=""):
             if 'tool_calls' in message and message['tool_calls']:
                 res.append(f'{icons[message["role"]]}: {message["tool_calls"]}')
             else:
-                res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
+                # res.append(f'{icons[message["role"]]}: {replace_extra_newlines(markdownify(message["content"]))}')
+                res.append(f'{icons[message["role"]]}: {message["content"]}')
         except:
             res.append(f'{icons["message"]}: {message}') # think is assistant of function calling
     out_str = '\n'.join(res) + '\n'
