@@ -1,6 +1,7 @@
 import os, glob
 import hashlib
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_core.documents import Document
 
 
 def _get_hash(content: str, is_file: bool = False) -> str:
@@ -24,6 +25,15 @@ def index_file(vectordb, fname):
 
     print(f'\tlen(pages) = {len(pages)}, len(docs) = {len(docs)}')
 
+    vectordb.add_documents(documents=docs, ids=ids)
+
+
+def index_docs(vectordb, docs):
+    ids = [_get_hash(doc.page_content) for doc in docs]
+    print(f'\tlen(docs) = {len(docs)}')
+    for id, doc in zip(ids, docs):
+        if 'source' not in doc.metadata:
+            doc.metadata['source'] = id
     vectordb.add_documents(documents=docs, ids=ids)
 
 
@@ -92,12 +102,24 @@ def _print_vectordb_info(vectordb):
 
 def build_vectordb(vectorstore, collection_name, folder):
     vectordb = get_vectordb(vectorstore, collection_name)
-    pdfs = sorted(glob.glob(os.path.join(folder, '**', '*.pdf'), recursive=True))
+    if os.path.isdir(folder):
+        pdfs = sorted(glob.glob(os.path.join(folder, '**', '*.pdf'), recursive=True))
 
-    for i, fname in enumerate(pdfs):
-        print(f'Indexing {i} of {len(pdfs)}: {fname}')
-        index_file(vectordb, fname)
-        _print_vectordb_info(vectordb)
+        for i, fname in enumerate(pdfs):
+            print(f'Indexing {i} of {len(pdfs)}: {fname}')
+            index_file(vectordb, fname)
+            _print_vectordb_info(vectordb)
+    elif folder.endswith('.json'):
+        import json
+        with open(folder) as f:
+            _docs = json.load(f)
+
+        docs = []
+        for _doc in _docs:
+            page_content = _doc['content'] if 'content' in _doc else _doc['text']
+            metadata = {k: v for k, v in _doc.items() if k not in ['content', 'text']}
+            docs.append(Document(page_content=page_content, metadata=metadata))
+        index_docs(vectordb, docs)
 
     return vectordb
 

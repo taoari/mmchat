@@ -58,23 +58,26 @@ def setup_vectorstores(args):
     from utils.vectorstore2 import get_vectordb, build_vectordb
 
     if args.vectorstore == "chroma":
-        vectordb = build_vectordb(args.vectorstore, 'default', 'data/collections/default')
+        vectordb = build_vectordb(args.vectorstore, args.collection_name, 'data/collections/default')
     else:
-        vectordb = get_vectordb(args.vectorstore, 'mycollection')
+        vectordb = get_vectordb(args.vectorstore, args.collection_name)
 
     CACHE['vectorstores']['default'] = vectordb
 
 def format_document(doc, score):
     """Format document for display."""
-    file_ref = f"{doc.metadata['source']}#page={doc.metadata['page'] + 1}"
+    metadata = doc.metadata
+    title = metadata.get('name') or metadata.get('title', None) # null-coalescing
+    file_ref = metadata['source'] if 'page' not in metadata else f"{metadata['source']}#page={metadata['page'] + 1}"
     file_server = os.environ.get('FILE_SERVER', '')
-    if args.env == 'prod_fastapi':
+    if file_server:
+        link = f"{file_server.rstrip('/')}/{file_ref.lstrip('/')}"
+    elif args.env == 'prod_fastapi':
         link = _prefix_local_file(file_ref, args.mount_path)
     else:
         link = _prefix_local_file(file_ref)
-    link = file_server + link
     return {
-        'text': f"📁 {os.path.basename(file_ref)}", 
+        'text': f"📁 {title if title else os.path.basename(file_ref)}", 
         'link': link, 
         'score': score
     }
@@ -95,7 +98,7 @@ def _search_bot_fn(message, history, **kwargs):
     else:
         client = CACHE[vectorstore]
 
-    results = search(client, 'mycollection', message)['hits']['hits']
+    results = search(client, args.collection_name, message)['hits']['hits']
 
     from langchain_core.documents import Document
     docs = [Document(page_content=res['_source']['text'], metadata=res['_source']['metadata']) for res in results]
@@ -113,7 +116,10 @@ def _rag_bot_fn(message, history, **kwargs):
     # Perform similarity search
     docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
     docs = [doc for doc, score in docs_with_scores]
-    scores = [1.0 - score for _, score in docs_with_scores]
+    if args.vectorstore == 'chroma':
+        scores = [1.0 - score for _, score in docs_with_scores]
+    else:
+        scores = [score for _, score in docs_with_scores]
     sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
 
     # LLM response with RAG system prompt
@@ -231,6 +237,8 @@ def parse_args():
         help='Auto-generate YAML files for PDF documents.')
     parser.add_argument('-vs', '--vectorstore', default='chroma', 
         help='Vectorstore type')
+    parser.add_argument('-c', '--collection-name', default='mycollection', 
+        help='collection name')
 
     args = parser.parse_args()
     return args
