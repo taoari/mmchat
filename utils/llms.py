@@ -142,15 +142,11 @@ def _preprocess_messages(message, history, **kwargs):
     if message:
         messages.append({'role': 'user', 'content': message})
     return messages, _kwargs
-    
-def _llm_preprocess(message, history, **kwargs):
-    client, model_id = _get_llm(**kwargs)
-    messages, _kwargs = _preprocess_messages(message, history, **kwargs)
-    return client, model_id, messages, _kwargs
 
 def _llm_call(message, history, **kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-    client, model_id, messages, _kwargs = _llm_preprocess(message, history, **kwargs)
+    client, model_id = _get_llm(**kwargs)
+    messages, _kwargs = _preprocess_messages(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,
         messages=messages,
@@ -164,7 +160,8 @@ def _llm_call(message, history, **kwargs):
 
 def _llm_call_stream(message, history, **kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-4o-mini')
-    client, model_id, messages, _kwargs = _llm_preprocess(message, history, **kwargs)
+    client, model_id = _get_llm(**kwargs)
+    messages, _kwargs = _preprocess_messages(message, history, **kwargs)
     resp = client.chat.completions.create(
         model=model_id,
         messages=messages,
