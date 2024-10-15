@@ -288,6 +288,10 @@ def get_demo_prod():
     return demo
 
 def main(args):
+    if args.open_in_webbrowser:
+        from utils.utils import open_in_webbrowser
+        open_in_webbrowser(f'http://localhost:{args.port}')
+        
     if args.env in ['dev', 'prod']:
         demo = get_demo_prod() if args.env == 'prod' else get_demo()
         demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
@@ -332,6 +336,9 @@ def parse_args():
     parser.add_argument(
         '--mount-path', type=str, default='/demo', 
         help='Mount path for gradio app.')
+    parser.add_argument(
+        '--open-in-webbrowser', action='store_true',
+        help='Open in web browser.')
 
     args = parser.parse_args()
     return args

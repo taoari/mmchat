@@ -79,3 +79,7 @@ def get_temp_file_name(prefix='gradio/app-', suffix='', filename=None):
     else:
         fname = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix).name
     return fname
+
+def open_in_webbrowser(url):
+    import webbrowser
+    webbrowser.open_new_tab(url)
