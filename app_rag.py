@@ -60,7 +60,10 @@ def setup_vectorstores(args):
     from utils.vectorstore2 import get_vectordb, build_vectordb
 
     for collection in args.collection_name:
-        if args.vectorstore == "chroma":
+        if collection == 'intents':
+            # Use Chroma (in-memory for the "intents" collection)
+            vectordb = build_vectordb('chroma', collection, 'data/intents/nlu.json')
+        elif args.vectorstore == "chroma":
             vectordb = build_vectordb(args.vectorstore, collection, 'data/collections/default')
         else:
             vectordb = get_vectordb(args.vectorstore, collection)
@@ -109,17 +112,6 @@ def _search_bot_fn(message, history, **kwargs):
     sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
     return render_message({'references': [{'title': "Sources", 'sources': sources}]})
 
-def _similarity_search_with_score(vectordb, message, **kwargs):
-    docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
-    return docs_with_scores
-
-def similarity_search_with_scores(message, **kwargs):
-    docs_with_scores = []
-    for collection in args.collection_name:
-        vectordb = CACHE['vectorstores'][collection]
-        docs_with_scores.extend(_similarity_search_with_score(vectordb, message, **kwargs))
-    return sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
-
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
     collection = kwargs.get('collection', args.collection_name[0])
@@ -145,6 +137,20 @@ def _rag_bot_fn(message, history, **kwargs):
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
+def _similarity_search_with_score(vectordb, message, **kwargs):
+    docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
+    if vectordb.__class__.__name__ in ['Chroma']:
+        # NOTE: chroma, pgvector returns distance, elasticsearch return similarity
+        docs_with_scores = [(doc, 1.0 - score) for doc, score in docs_with_scores]
+    return docs_with_scores
+
+def similarity_search_with_scores(message, **kwargs):
+    docs_with_scores = []
+    for collection in args.collection_name:
+        vectordb = CACHE['vectorstores'][collection]
+        docs_with_scores.extend(_similarity_search_with_score(vectordb, message, **kwargs))
+    return sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
+
 def _intent_classif(docs_with_scores):
     """Return intent if best match is from 'intents' collection else None."""
     intent = None
@@ -162,6 +168,7 @@ def _rag_bot_fn_with_intent_classification(message, history, **kwargs):
     # Perform similarity search
     k = kwargs.get('query_k', 3)
     docs_with_scores = similarity_search_with_scores(message, **kwargs)
+    
     intent = _intent_classif(docs_with_scores)
     kwargs['session_state']['intent'] = intent
 
@@ -175,10 +182,7 @@ def _rag_bot_fn_with_intent_classification(message, history, **kwargs):
         docs_with_scores = docs_with_scores[:k]
 
         docs = [doc for doc, score in docs_with_scores]
-        if args.vectorstore in ['chroma', 'pgvector']:
-            scores = [1.0 - score for _, score in docs_with_scores]
-        else:
-            scores = [score for _, score in docs_with_scores]
+        scores = [score for _, score in docs_with_scores]
         sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
 
         # LLM response with RAG system prompt
