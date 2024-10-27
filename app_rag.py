@@ -235,6 +235,9 @@ def parse_args():
     parser.add_argument(
         '--mount-path', type=str, default='/demo', 
         help='Mount path for gradio app.')
+    parser.add_argument(
+        '--open-in-webbrowser', action='store_true',
+        help='Open in web browser.')
     parser.add_argument('--autogen-yaml', action='store_true', 
         help='Auto-generate YAML files for PDF documents.')
     parser.add_argument('-vs', '--vectorstore', default='chroma', 

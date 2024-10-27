@@ -133,7 +133,7 @@ def parse_args():
         description='Elastic Index',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument('--folder', default='data/collections/default',
+    parser.add_argument('-f', '--folder', default='data/collections/default',
             help='Folder')
     parser.add_argument('-c', '--collection-name', default='mycollection',
             help='Collection name')
