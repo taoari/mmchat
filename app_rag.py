@@ -15,6 +15,8 @@ from langchain.globals import set_debug
 
 set_debug(True)
 
+REPHRASE_THRESH = 0.2
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -36,8 +38,8 @@ CACHE = {"vectorstores": {}, "clients": {}}
 from app import SETTINGS
 SETTINGS['Parameters']['bot_fn'] = {
             'cls': 'Dropdown', 
-            'choices': ['auto', 'llm', 'search', 'rag', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
-            'value': 'rag',
+            'choices': ['auto', 'llm', 'search', 'rag', 'rag_intent', 'rag_rewrite_retrieve_read', 'rag_rewrite_retrieve_read_search'], 
+            'value': 'rag_intent',
             'label': "Bot Function",
         }
 SETTINGS['Parameters']['query_k'] = {'cls': 'Slider', 'minimum': 1, 'maximum': 5, 'value': 3, 'step': 1, 'label': "Number of sources"}
@@ -57,12 +59,12 @@ def setup_vectorstores(args):
     """setup vectorstores collection based on provided arguments."""
     from utils.vectorstore2 import get_vectordb, build_vectordb
 
-    if args.vectorstore == "chroma":
-        vectordb = build_vectordb(args.vectorstore, args.collection_name, 'data/collections/default')
-    else:
-        vectordb = get_vectordb(args.vectorstore, args.collection_name)
-
-    CACHE['vectorstores']['default'] = vectordb
+    for collection in args.collection_name:
+        if args.vectorstore == "chroma":
+            vectordb = build_vectordb(args.vectorstore, collection, 'data/collections/default')
+        else:
+            vectordb = get_vectordb(args.vectorstore, collection)
+        CACHE['vectorstores'][collection] = vectordb
 
 def format_document(doc, score):
     """Format document for display."""
@@ -107,16 +109,27 @@ def _search_bot_fn(message, history, **kwargs):
     sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
     return render_message({'references': [{'title': "Sources", 'sources': sources}]})
 
+def _similarity_search_with_score(vectordb, message, **kwargs):
+    docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
+    return docs_with_scores
+
+def similarity_search_with_scores(message, **kwargs):
+    docs_with_scores = []
+    for collection in args.collection_name:
+        vectordb = CACHE['vectorstores'][collection]
+        docs_with_scores.extend(_similarity_search_with_score(vectordb, message, **kwargs))
+    return sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
+
 def _rag_bot_fn(message, history, **kwargs):
     """RAG-based bot response function."""
-    collection = kwargs.get('collection', 'default')
+    collection = kwargs.get('collection', args.collection_name[0])
     chat_engine = kwargs['chat_engine']
     vectordb = CACHE['vectorstores'][collection]
 
     # Perform similarity search
     docs_with_scores = vectordb.similarity_search_with_score(message, k=kwargs.get('query_k', 3))
     docs = [doc for doc, score in docs_with_scores]
-    if args.vectorstore == 'chroma':
+    if args.vectorstore in ['chroma', 'pgvector']:
         scores = [1.0 - score for _, score in docs_with_scores]
     else:
         scores = [score for _, score in docs_with_scores]
@@ -131,6 +144,52 @@ def _rag_bot_fn(message, history, **kwargs):
 
     for chunk in bot_response:
         yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
+
+def _intent_classif(docs_with_scores):
+    """Return intent if best match is from 'intents' collection else None."""
+    intent = None
+    for doc, score in docs_with_scores:
+        if score < REPHRASE_THRESH:
+            intent = 'rephrase'
+        elif 'intent' in doc.metadata:
+            intent = doc.metadata['intent']
+        break
+    return intent
+
+def _rag_bot_fn_with_intent_classification(message, history, **kwargs):
+    """RAG-based bot response function."""
+
+    # Perform similarity search
+    k = kwargs.get('query_k', 3)
+    docs_with_scores = similarity_search_with_scores(message, **kwargs)
+    intent = _intent_classif(docs_with_scores)
+    kwargs['session_state']['intent'] = intent
+
+    if intent == 'rephrase':
+        yield "Please rephrase your question."
+    elif intent is not None:
+        # TODO: use if intent == "<intent>" for different intents
+        yield from llms._llm_call_stream(message, history, **kwargs)
+    else:
+        docs_with_scores = [(doc, score) for doc, score in docs_with_scores if 'intent' not in doc.metadata]
+        docs_with_scores = docs_with_scores[:k]
+
+        docs = [doc for doc, score in docs_with_scores]
+        if args.vectorstore in ['chroma', 'pgvector']:
+            scores = [1.0 - score for _, score in docs_with_scores]
+        else:
+            scores = [score for _, score in docs_with_scores]
+        sources = [format_document(doc, score) for doc, score in zip(docs, scores)]
+
+        # LLM response with RAG system prompt
+        system_prompt = jinja2.Template(prompts.PROMPT_RAG).render(docs=docs)
+        _kwargs = {**kwargs, 'system_prompt': system_prompt}
+        # NOTE: use messages and json for API, use history (persistence) and html for UI
+        _history = _rerender_history(history, 'plain')
+        bot_response = llms._llm_call_stream(message, _history, **_kwargs)
+
+        for chunk in bot_response:
+            yield render_message({'text': chunk, 'references': [{'title': "Sources", 'sources': sources}]})
 
 def _rag_rewrite_retrieve_read_search(message, history, **kwargs):
     from utils.bot_fn import rewrite_retrieval_read
@@ -198,6 +257,7 @@ def bot_fn(message, history, **kwargs):
             'random': _random_bot_fn,
             'search': _search_bot_fn,
             'rag': _rag_bot_fn,
+            'rag_intent': _rag_bot_fn_with_intent_classification,
             'rag_rewrite_retrieve_read': _rag_rewrite_retrieve_read,
             'rag_rewrite_retrieve_read_search': _rag_rewrite_retrieve_read_search,
         }
@@ -240,9 +300,9 @@ def parse_args():
         help='Open in web browser.')
     parser.add_argument('--autogen-yaml', action='store_true', 
         help='Auto-generate YAML files for PDF documents.')
-    parser.add_argument('-vs', '--vectorstore', default='chroma', 
+    parser.add_argument('-vs', '--vectorstore', default='elasticsearch', 
         help='Vectorstore type')
-    parser.add_argument('-c', '--collection-name', default='mycollection', 
+    parser.add_argument('-c', '--collection-name', default='workplace', 
         help='collection name')
 
     args = parser.parse_args()
@@ -257,6 +317,8 @@ if __name__ == '__main__':
     app._default_session_state = _default_session_state
     app.bot_fn = bot_fn
     args = parse_args()
+    args.collection_name = args.collection_name.split(',') + ['intents']
+    print(args)
 
     # setup vectorstores and configure Gradio static paths
     setup_vectorstores(args)
