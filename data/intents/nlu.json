@@ -1,0 +1,162 @@
+[
+  {
+    "text": "hey",
+    "intent": "greet"
+  },
+  {
+    "text": "hello",
+    "intent": "greet"
+  },
+  {
+    "text": "hi",
+    "intent": "greet"
+  },
+  {
+    "text": "hello there",
+    "intent": "greet"
+  },
+  {
+    "text": "good morning",
+    "intent": "greet"
+  },
+  {
+    "text": "good evening",
+    "intent": "greet"
+  },
+  {
+    "text": "moin",
+    "intent": "greet"
+  },
+  {
+    "text": "hey there",
+    "intent": "greet"
+  },
+  {
+    "text": "let's go",
+    "intent": "greet"
+  },
+  {
+    "text": "hey dude",
+    "intent": "greet"
+  },
+  {
+    "text": "goodmorning",
+    "intent": "greet"
+  },
+  {
+    "text": "goodevening",
+    "intent": "greet"
+  },
+  {
+    "text": "good afternoon",
+    "intent": "greet"
+  },
+  {
+    "text": "cu",
+    "intent": "goodbye"
+  },
+  {
+    "text": "good by",
+    "intent": "goodbye"
+  },
+  {
+    "text": "cee you later",
+    "intent": "goodbye"
+  },
+  {
+    "text": "good night",
+    "intent": "goodbye"
+  },
+  {
+    "text": "bye",
+    "intent": "goodbye"
+  },
+  {
+    "text": "goodbye",
+    "intent": "goodbye"
+  },
+  {
+    "text": "have a nice day",
+    "intent": "goodbye"
+  },
+  {
+    "text": "see you around",
+    "intent": "goodbye"
+  },
+  {
+    "text": "bye bye",
+    "intent": "goodbye"
+  },
+  {
+    "text": "see you later",
+    "intent": "goodbye"
+  },
+  {
+    "text": "yes",
+    "intent": "affirm"
+  },
+  {
+    "text": "y",
+    "intent": "affirm"
+  },
+  {
+    "text": "indeed",
+    "intent": "affirm"
+  },
+  {
+    "text": "of course",
+    "intent": "affirm"
+  },
+  {
+    "text": "that sounds good",
+    "intent": "affirm"
+  },
+  {
+    "text": "correct",
+    "intent": "affirm"
+  },
+  {
+    "text": "no",
+    "intent": "deny"
+  },
+  {
+    "text": "n",
+    "intent": "deny"
+  },
+  {
+    "text": "never",
+    "intent": "deny"
+  },
+  {
+    "text": "I don't think so",
+    "intent": "deny"
+  },
+  {
+    "text": "don't like that",
+    "intent": "deny"
+  },
+  {
+    "text": "no way",
+    "intent": "deny"
+  },
+  {
+    "text": "not really",
+    "intent": "deny"
+  },
+  {
+    "text": "are you a bot?",
+    "intent": "bot_challenge"
+  },
+  {
+    "text": "are you a human?",
+    "intent": "bot_challenge"
+  },
+  {
+    "text": "am I talking to a bot?",
+    "intent": "bot_challenge"
+  },
+  {
+    "text": "am I talking to a human?",
+    "intent": "bot_challenge"
+  }
+]
