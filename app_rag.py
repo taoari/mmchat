@@ -308,6 +308,8 @@ def parse_args():
         help='Vectorstore type')
     parser.add_argument('-c', '--collection-name', default='workplace', 
         help='collection name')
+    parser.add_argument('--embeddings', default=None, type=str, 
+        help='embeddings (format: "<endpoint>;<model_id>")')
 
     args = parser.parse_args()
     return args

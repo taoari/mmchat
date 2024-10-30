@@ -37,9 +37,21 @@ def index_docs(vectordb, docs):
     vectordb.add_documents(documents=docs, ids=ids)
 
 
-def get_vectordb(vectorstore, collection_name):
-    from langchain_huggingface import HuggingFaceEmbeddings
-    embeddings = HuggingFaceEmbeddings()
+def get_embeddings(embeddings_conn_str):
+    if embeddings_conn_str:
+        endpoint, model_id = embeddings_conn_str.split(';')
+        # NOTE: infinity embeddings are compatible with OpenAI embeddings, 
+        # theoretically should be able to use OpenAIEmbeddings
+        from langchain_community.embeddings import InfinityEmbeddings
+        embeddings = InfinityEmbeddings(model=model_id, infinity_api_url=f'{endpoint}/v1')
+    else:
+        from langchain_huggingface import HuggingFaceEmbeddings
+        embeddings = HuggingFaceEmbeddings()
+    return embeddings
+
+
+def get_vectordb(vectorstore, collection_name, embeddings_conn_str=None):
+    embeddings = get_embeddings(embeddings_conn_str)
 
     if vectorstore == 'chroma':
         from langchain_chroma import Chroma
@@ -100,18 +112,18 @@ def _print_vectordb_info(vectordb):
         print(f"\tvector db {vectordb._collection.name} has {vectordb._collection.count()} records")
 
 
-def build_vectordb(vectorstore, collection_name, folder):
-    vectordb = get_vectordb(vectorstore, collection_name)
-    if os.path.isdir(folder):
-        pdfs = sorted(glob.glob(os.path.join(folder, '**', '*.pdf'), recursive=True))
+def build_vectordb(vectorstore, collection_name, folder_or_file, embeddings_conn_str=None):
+    vectordb = get_vectordb(vectorstore, collection_name, embeddings_conn_str)
+    if os.path.isdir(folder_or_file):
+        pdfs = sorted(glob.glob(os.path.join(folder_or_file, '**', '*.pdf'), recursive=True))
 
         for i, fname in enumerate(pdfs):
             print(f'Indexing {i} of {len(pdfs)}: {fname}')
             index_file(vectordb, fname)
             _print_vectordb_info(vectordb)
-    elif folder.endswith('.json'):
+    elif folder_or_file.endswith('.json'):
         import json
-        with open(folder) as f:
+        with open(folder_or_file) as f:
             _docs = json.load(f)
 
         docs = []
@@ -133,18 +145,19 @@ def parse_args():
         description='Elastic Index',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument('-f', '--folder', default='data/collections/default',
-            help='Folder')
+    parser.add_argument('-f', '--folder_or_file', default='data/collections/default',
+            help='Folder or JSON file')
     parser.add_argument('-c', '--collection-name', default='mycollection',
             help='Collection name')
     parser.add_argument('-vs', '--vectorstore', default='chroma',
             help='Vector store')
-    parser.add_argument('--embeddings', default=None,
-            help='Embeddings')
+    parser.add_argument('--embeddings', default=None, type=str, 
+        help='embeddings (format: "<endpoint>;<model_id>")')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
     print(args)
 
-    build_vectordb(args.vectorstore, args.collection_name, args.folder)
+    build_vectordb(args.vectorstore, args.collection_name, args.folder_or_file, 
+            embeddings_conn_str=args.embeddings)
