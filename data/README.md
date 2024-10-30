@@ -1,6 +1,9 @@
 
 ## Collections
 
+* NOTE:
+  * intents is built on-the-fly.
+
 ```bash
 # intents
 python ./data/intents/to_json.py

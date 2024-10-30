@@ -62,11 +62,11 @@ def setup_vectorstores(args):
     for collection in args.collection_name:
         if collection == 'intents':
             # Use Chroma (in-memory for the "intents" collection)
-            vectordb = build_vectordb('chroma', collection, 'data/intents/nlu.json')
+            vectordb = build_vectordb('chroma', collection, 'data/intents/nlu.json', embeddings_conn_str=args.embeddings)
         elif args.vectorstore == "chroma":
-            vectordb = build_vectordb(args.vectorstore, collection, 'data/collections/default')
+            vectordb = build_vectordb(args.vectorstore, collection, f'data/collections/{collection}', embeddings_conn_str=args.embeddings)
         else:
-            vectordb = get_vectordb(args.vectorstore, collection)
+            vectordb = get_vectordb(args.vectorstore, collection, embeddings_conn_str=args.embeddings)
         CACHE['vectorstores'][collection] = vectordb
 
 def format_document(doc, score):
@@ -323,7 +323,10 @@ if __name__ == '__main__':
     app._default_session_state = _default_session_state
     app.bot_fn = bot_fn
     args = parse_args()
-    args.collection_name = args.collection_name.split(',') + ['intents']
+    if 'COLLECTION_NAME' in os.environ:
+        args.collection_name = os.environ['COLLECTION_NAME'].split(',')
+    if 'EMBEDDINGS_CONNECTION_STRING' in os.environ:
+        args.embeddings = os.environ['EMBEDDINGS_CONNECTION_STRING']
     print(args)
 
     # setup vectorstores and configure Gradio static paths
