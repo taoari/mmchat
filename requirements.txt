@@ -1,17 +1,18 @@
-gradio<=4.40
-python-dotenv
+gradio
 bs4
-jinja2
-markdownify
+# chromadb
+psycopg[binary,pool]
 
-# for LLM
-openai
 langchain
-langchain_openai
-langchain_community
+langgraph
 
-# for Azure
-azure-cognitiveservices-speech
+langchain-core
+langchain-community 
+langchain-text-splitters
 
-# for agent
-tool2schema
+# langchain-chroma
+langchain_postgres
+langchain-openai
+langchain-huggingface
+
+langgraph-cli[inmem]
