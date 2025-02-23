@@ -8,6 +8,7 @@ from langgraph.checkpoint.memory import MemorySaver
 class State(TypedDict):
     input: str
     user_feedback: str
+    confirm: str
 
 
 def step_1(state):
@@ -21,6 +22,14 @@ def human_feedback(state):
     return {"user_feedback": feedback}
 
 
+def confirm_to_continue(state):
+    print("---confirm_to_continue---")
+    confirm = interrupt(
+        {"prompt": "Please provide feedback:", "options": ["Yes", "No"]}
+    )
+    return {"confirm": confirm}
+
+
 def step_3(state):
     print("---Step 3---")
     pass
@@ -29,10 +38,12 @@ def step_3(state):
 builder = StateGraph(State)
 builder.add_node("step_1", step_1)
 builder.add_node("human_feedback", human_feedback)
+builder.add_node("confirm_to_continue", confirm_to_continue)
 builder.add_node("step_3", step_3)
 builder.add_edge(START, "step_1")
 builder.add_edge("step_1", "human_feedback")
-builder.add_edge("human_feedback", "step_3")
+builder.add_edge("human_feedback", "confirm_to_continue")
+builder.add_edge("confirm_to_continue", "step_3")
 builder.add_edge("step_3", END)
 
 # Set up memory
@@ -65,20 +76,19 @@ def test_hil():
         print("\n")
 
 
-def process_interrupt(snapshot):
-    # TODO: assume only one task, one interrupt
-    interrupt = {}
+def get_interrupts(snapshot):
+    interrupts = []
     if snapshot.next:
         for task in snapshot.tasks:
             for interrupt_ in task.interrupts:
-                interrupt["prompt"] = interrupt_.value
-    return interrupt
+                interrupts.append(interrupt_.value)
+    return interrupts
 
 
 def test_hil_interactive():
     config = {"configurable": {"thread_id": "1"}}
 
-    interrupt = {}
+    interrupts = []
 
     while True:
         user_input = input("User: ")
@@ -86,18 +96,18 @@ def test_hil_interactive():
             print("Goodbye!")
             break
 
-        if interrupt:
+        if interrupts:
             human_command = Command(resume=user_input)
             response = graph.invoke(human_command, config)
         else:
             response = graph.invoke({"input": user_input}, config)
 
         snapshot = graph.get_state(config)
-        interrupt = process_interrupt(snapshot)
+        interrupts = get_interrupts(snapshot)
         print(response)
 
-        if interrupt:
-            print(f"Assistant (prompt): {interrupt['prompt']}")
+        if interrupts:
+            print(f"Assistant (prompt): {interrupts}")
 
 
 if __name__ == "__main__":

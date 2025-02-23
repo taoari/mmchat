@@ -59,26 +59,13 @@ memory = MemorySaver()
 graph = graph_builder.compile(checkpointer=memory)
 
 
-def process_hil(values):
-    if "messages" in values and len(values["messages"]) > 0:
-        if "tool_calls" in values["messages"][-1].additional_kwargs:
-            tool_calls = values["messages"][-1].additional_kwargs["tool_calls"]
-            if tool_calls[0]["function"]["name"] == "human_assistance":
-                prompt = json.loads(tool_calls[0]["function"]["arguments"])["query"]
-                resume_key = "data"
-                return prompt, resume_key
-    return None, None
-
-
-def process_interrupt(snapshot):
-    # TODO: assume only one task, one interrupt
-    interrupt = {}
+def get_interrupts(snapshot):
+    interrupts = []
     if snapshot.next:
         for task in snapshot.tasks:
             for interrupt_ in task.interrupts:
-                # NOTE: interrupt_.value can be a dictionary, e.g. for options
-                interrupt["prompt"] = interrupt_.value
-    return interrupt
+                interrupts.append(interrupt_.value)
+    return interrupts
 
 
 def test_hil():
@@ -113,7 +100,7 @@ def test_hil():
 def test_hil_interactive():
     config = {"configurable": {"thread_id": "1"}}
 
-    interrupt = {}
+    interrupts = []
 
     while True:
         user_input = input("User: ")
@@ -121,8 +108,8 @@ def test_hil_interactive():
             print("Goodbye!")
             break
 
-        if interrupt:
-            # TODO: handle resume as a dict and interrupt.value as a dict
+        if interrupts:
+            # TODO: handle resume as a dict and s.value as a dict
             human_command = Command(resume={"data": user_input})
             response = graph.invoke(human_command, config)
         else:
@@ -131,11 +118,11 @@ def test_hil_interactive():
             )
 
         snapshot = graph.get_state(config)
-        interrupt = process_interrupt(snapshot)
+        interrupts = get_interrupts(snapshot)
         response["messages"][-1].pretty_print()
 
-        if interrupt:
-            print(f"Assistant (prompt): {interrupt['prompt']}")
+        if interrupts:
+            print(f"Assistant (prompt): {interrupts}")
 
 
 if __name__ == "__main__":

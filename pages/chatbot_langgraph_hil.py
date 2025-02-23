@@ -6,8 +6,8 @@ from PIL import Image
 from openai import OpenAI
 from config.config import LLM_ENDPOINTS
 
-# from utils.rag import graph
-from graphs.chatbot_hil import graph
+from langgraph.types import Command, interrupt
+from graphs.chatbot_hil import graph, get_interrupts
 from utils.deepseek import format_deepseek_message
 
 
@@ -18,18 +18,14 @@ def get_messages(message, history, system_prompt=None):
     return messages
 
 
-prompt, resume_key = None, None  # TODO: per user
-
-
 def bot_fn(message, history, request: gr.routes.Request, chat_model):
-    global prompt, resume_key
-    from langgraph.types import Command, interrupt
-    from graphs.chatbot_hil import process_hil
-
     config = {"configurable": {"thread_id": request.session_hash}}
 
-    if prompt is not None:
-        human_command = Command(resume={resume_key: message})
+    snapshot = graph.get_state(config)
+    interrupts = get_interrupts(snapshot)
+
+    if interrupts:
+        human_command = Command(resume={"data": message})
         response = graph.invoke(human_command, config)
     else:
         response = graph.invoke(
@@ -37,18 +33,16 @@ def bot_fn(message, history, request: gr.routes.Request, chat_model):
         )
 
     yield format_deepseek_message(response["messages"][-1].content), response
-    # response["messages"][-1].pretty_print()
 
     snapshot = graph.get_state(config)
-    prompt, resume_key = process_hil(snapshot.values)
-    if prompt:
-        yield f"Prompt: {prompt}", response
-        # print(f"Assistant: {prompt}")
+    interrupts = get_interrupts(snapshot)
+
+    if interrupts:
+        yield f"Prompt: {interrupts}", response
 
     if request:
         print(f"Request headers dictionary: {request.headers}")
         print(f"Session hash: {request.session_hash}")
-    # return format_deepseek_message(response["messages"][-1].content), response
 
 
 def get_demo():
