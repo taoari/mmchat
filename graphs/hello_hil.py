@@ -44,6 +44,7 @@ graph = builder.compile(checkpointer=memory)
 # View
 # display(Image(graph.get_graph().draw_mermaid_png()))
 
+
 def test_hil():
     # Input
     initial_input = {"input": "hello world"}
@@ -64,26 +65,15 @@ def test_hil():
         print("\n")
 
 
-def process_interrupt(events):
-    # NOTE: __interrupt__ can only be captured through graph.stream(stream_mode="updates")
-    # TODO: assue resume is string, todo for dict
-    interrupt = {}
-    for event in events:
-        if '__interrupt__' in event:
-            # TODO: assume only single interrupt
-            interrupt['prompt'] = event['__interrupt__'][0].value
-    return interrupt
-
-
 def process_interrupt(snapshot):
     # TODO: assume only one task, one interrupt
     interrupt = {}
     if snapshot.next:
         for task in snapshot.tasks:
             for interrupt_ in task.interrupts:
-                interrupt['prompt'] = interrupt_.value
+                interrupt["prompt"] = interrupt_.value
     return interrupt
-            
+
 
 def test_hil_interactive():
     config = {"configurable": {"thread_id": "1"}}
@@ -100,7 +90,7 @@ def test_hil_interactive():
             human_command = Command(resume=user_input)
             response = graph.invoke(human_command, config)
         else:
-            response = graph.invoke({'input': user_input}, config)
+            response = graph.invoke({"input": user_input}, config)
 
         snapshot = graph.get_state(config)
         interrupt = process_interrupt(snapshot)
@@ -108,6 +98,7 @@ def test_hil_interactive():
 
         if interrupt:
             print(f"Assistant (prompt): {interrupt['prompt']}")
+
 
 if __name__ == "__main__":
     test_hil_interactive()
