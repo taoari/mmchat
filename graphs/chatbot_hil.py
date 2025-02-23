@@ -122,7 +122,7 @@ def test_hil_interactive():
             break
 
         if interrupt:
-            # TODO: handle resume as a dict
+            # TODO: handle resume as a dict and interrupt.value as a dict
             human_command = Command(resume={"data": user_input})
             response = graph.invoke(human_command, config)
         else:
