@@ -17,8 +17,13 @@ def load_modules(path: str):
     return loaded_modules
 
 
-def gr_auto_route(pages, index_page="index"):
+def gr_auto_route(pages, index_page="index", includes=[], excludes=[]):
     """Dynamically generates routes for Gradio UI components from the pages module."""
+
+    # Default to list all modules in pages if includes is empty
+    if not includes:
+        includes = dir(pages)
+
     with gr.Blocks() as demo:
         # Load the index page first (default entry page)
         if hasattr(pages, index_page):
@@ -26,9 +31,13 @@ def gr_auto_route(pages, index_page="index"):
             if hasattr(page_module, "demo"):
                 page_module.demo.render()
 
-    # Iterate through available page modules, excluding special attributes and the index page
-    for module_name in dir(pages):
-        if module_name.startswith("__") or module_name == index_page:
+    # Iterate through the provided includes, excluding specified modules and the index page
+    for module_name in includes:
+        if (
+            module_name.startswith("__")
+            or module_name == index_page
+            or module_name in excludes
+        ):
             continue
 
         page_module = getattr(pages, module_name)
