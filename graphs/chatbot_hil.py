@@ -70,6 +70,17 @@ def process_hil(values):
     return None, None
 
 
+def process_interrupt(snapshot):
+    # TODO: assume only one task, one interrupt
+    interrupt = {}
+    if snapshot.next:
+        for task in snapshot.tasks:
+            for interrupt_ in task.interrupts:
+                # NOTE: interrupt_.value can be a dictionary, e.g. for options
+                interrupt["prompt"] = interrupt_.value
+    return interrupt
+
+
 def test_hil():
     user_input = "I need some expert guidance for building an AI agent. Could you request assistance for me?"
     config = {"configurable": {"thread_id": "1"}}
@@ -102,27 +113,30 @@ def test_hil():
 def test_hil_interactive():
     config = {"configurable": {"thread_id": "1"}}
 
-    prompt, resume_key = None, None
+    interrupt = {}
+
     while True:
         user_input = input("User: ")
         if user_input.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
             break
 
-        if prompt is not None:
-            human_command = Command(resume={resume_key: user_input})
+        if interrupt:
+            # TODO: handle resume as a dict
+            human_command = Command(resume={"data": user_input})
             response = graph.invoke(human_command, config)
         else:
             response = graph.invoke(
                 {"messages": [{"role": "user", "content": user_input}]}, config
             )
-        response["messages"][-1].pretty_print()
 
         snapshot = graph.get_state(config)
-        prompt, resume_key = process_hil(snapshot.values)
-        if prompt:
-            print(f"Assistant: {prompt}")
+        interrupt = process_interrupt(snapshot)
+        response["messages"][-1].pretty_print()
+
+        if interrupt:
+            print(f"Assistant (prompt): {interrupt['prompt']}")
 
 
 if __name__ == "__main__":
-    test_hil()
+    test_hil_interactive()
